@@ -17,8 +17,6 @@ import io.ktor.http.contentType
 import io.ktor.serialization.kotlinx.json.json
 import kotlinx.serialization.json.Json
 
-const val GOREST_BASE_URL = "https://gorest.co.in/public/v2/"
-
 object HttpClientFactory {
 
     /** Uses the platform engine on the classpath (OkHttp on Android, Darwin on iOS). */
@@ -36,9 +34,9 @@ object HttpClientFactory {
             )
         }
         install(HttpTimeout) {
-            requestTimeoutMillis = 20_000
-            connectTimeoutMillis = 20_000
-            socketTimeoutMillis = 20_000
+            requestTimeoutMillis = ApiConstants.TIMEOUT_MILLIS
+            connectTimeoutMillis = ApiConstants.TIMEOUT_MILLIS
+            socketTimeoutMillis = ApiConstants.TIMEOUT_MILLIS
         }
         install(Logging) {
             logger = Logger.SIMPLE
@@ -46,7 +44,7 @@ object HttpClientFactory {
             sanitizeHeader { header -> header == HttpHeaders.Authorization }
         }
         install(DefaultRequest.Plugin) {
-            url(GOREST_BASE_URL)
+            url(ApiConstants.BASE_URL)
             contentType(ContentType.Application.Json)
             headers {
                 append(HttpHeaders.Authorization, bearerToken(apiKey))

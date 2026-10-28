@@ -15,7 +15,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         // Must run before super.onCreate so the starting theme is swapped correctly.
         installSplashScreen().setKeepOnScreenCondition {
-            mainViewModel.state.value.isLoading
+            mainViewModel.isLoading.value
         }
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)

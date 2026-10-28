@@ -3,55 +3,35 @@ package com.androidlearning.sliide_challenge.splash
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.androidlearning.sliide_challenge.core.domain.user.MainRepository
-import com.androidlearning.sliide_challenge.core.domain.util.onFailure
-import com.androidlearning.sliide_challenge.core.domain.util.onSuccess
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 /**
- * Loads startup data. While [MainState.isLoading] is true, Android keeps the system splash on
+ * Prepares startup data. While [isLoading] is true, Android keeps the system splash on
  * screen and iOS shows [SplashContent], which mirrors the native launch screen.
+ *
+ * The database is the source of truth: the network is only hit when nothing is cached. If that
+ * fetch fails the feed opens on its empty state.
  */
 class MainViewModel(
     private val mainRepository: MainRepository,
 ) : ViewModel() {
 
-    private val _state = MutableStateFlow(MainState())
-    val state: StateFlow<MainState> = _state.asStateFlow()
+    private val _isLoading = MutableStateFlow(true)
+    val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
 
     init {
-        loadUsers()
-    }
-
-    fun onAction(action: MainAction) {
-        when (action) {
-            MainAction.OnRetryClick -> loadUsers()
-        }
-    }
-
-    private fun loadUsers() {
         viewModelScope.launch {
-            _state.update {
-                it.copy(isLoading = true)
+            _isLoading.value = true
+
+            if (mainRepository.observeUsers().first().isEmpty()) {
+                mainRepository.loadUsers()
             }
 
-            mainRepository.loadUsers()
-                .onSuccess {
-                    _state.update {
-                        it.copy(isLoading = false)
-                    }
-                }
-                .onFailure { error ->
-                    _state.update {
-                        it.copy(
-                            isLoading = false,
-                            error = error
-                        )
-                    }
-                }
+            _isLoading.value = false
         }
     }
 }

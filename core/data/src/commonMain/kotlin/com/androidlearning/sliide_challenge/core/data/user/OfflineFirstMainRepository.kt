@@ -1,5 +1,7 @@
 package com.androidlearning.sliide_challenge.core.data.user
 
+import com.androidlearning.sliide_challenge.core.database.user.UserDao
+import com.androidlearning.sliide_challenge.core.database.user.UserEntity
 import com.androidlearning.sliide_challenge.core.domain.user.MainRepository
 import com.androidlearning.sliide_challenge.core.domain.user.User
 import com.androidlearning.sliide_challenge.core.domain.util.DataError
@@ -8,22 +10,24 @@ import com.androidlearning.sliide_challenge.core.domain.util.asEmptyResult
 import com.androidlearning.sliide_challenge.core.domain.util.map
 import com.androidlearning.sliide_challenge.core.domain.util.onSuccess
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.map
 
-/** Holds loaded users in memory until the Room cache replaces it as the source of truth. */
-class KtorMainRepository(
+/**
+ * Room is the single source of truth: [observeUsers] always reads the cache, and [loadUsers]
+ * replaces the cache with the latest GoRest page. A failed fetch leaves the cache untouched.
+ */
+class OfflineFirstMainRepository(
     private val mainApi: MainApi,
+    private val userDao: UserDao,
 ) : MainRepository {
 
-    private val users = MutableStateFlow<List<User>>(emptyList())
-
-    override fun observeUsers(): Flow<List<User>> = users.asStateFlow()
+    override fun observeUsers(): Flow<List<User>> =
+        userDao.getAll().map { entities -> entities.map(UserEntity::toDomain) }
 
     override suspend fun loadUsers(): EmptyResult<DataError.Network> {
-        return mainApi.getLastPageUsers()
-            .map { dtos -> dtos.map { it.toDomain() } }
-            .onSuccess { users.value = it }
+        return mainApi.getLatestUsers()
+            .map { dtos -> dtos.map { it.toDomain().toEntity() } }
+            .onSuccess { entities -> userDao.replaceAll(entities) }
             .asEmptyResult()
     }
 }

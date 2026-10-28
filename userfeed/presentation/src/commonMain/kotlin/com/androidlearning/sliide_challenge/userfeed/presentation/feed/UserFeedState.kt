@@ -1,5 +1,11 @@
 package com.androidlearning.sliide_challenge.userfeed.presentation.feed
 
+import com.androidlearning.sliide_challenge.core.domain.user.User
+
 data class UserFeedState(
-    val isLoading: Boolean = false,
-)
+    /** True until the database's first emission, so the empty state doesn't flash on open. */
+    val isLoading: Boolean = true,
+    val users: List<User> = emptyList(),
+) {
+    val isEmpty: Boolean get() = !isLoading && users.isEmpty()
+}

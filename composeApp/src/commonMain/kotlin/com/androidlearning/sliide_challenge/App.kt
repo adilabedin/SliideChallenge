@@ -18,17 +18,14 @@ import org.koin.compose.viewmodel.koinViewModel
 fun App(
     mainViewModel: MainViewModel = koinViewModel(),
 ) {
-    val state by mainViewModel.state.collectAsStateWithLifecycle()
+    val isLoading by mainViewModel.isLoading.collectAsStateWithLifecycle()
 
     SliideTheme {
-        Crossfade(targetState = state.isReady) { isReady ->
-            if (isReady) {
-                NavigationRoot()
+        Crossfade(targetState = isLoading) { loading ->
+            if (loading) {
+                SplashContent()
             } else {
-                SplashContent(
-                    state = state,
-                    onAction = mainViewModel::onAction,
-                )
+                NavigationRoot()
             }
         }
     }

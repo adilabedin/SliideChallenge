@@ -105,10 +105,10 @@ suspend inline fun <reified T> responseToResult(
     }
 }
 
-/** Accepts `users`, `/users`, or an absolute URL and resolves it against [GOREST_BASE_URL]. */
+/** Accepts `users`, `/users`, or an absolute URL and resolves it against [ApiConstants.BASE_URL]. */
 fun constructRoute(route: String): String {
     return when {
         route.startsWith("http://") || route.startsWith("https://") -> route
-        else -> GOREST_BASE_URL + route.removePrefix("/")
+        else -> ApiConstants.BASE_URL + route.removePrefix("/")
     }
 }

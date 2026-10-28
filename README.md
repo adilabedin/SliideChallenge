@@ -30,19 +30,44 @@ This is a Kotlin Multiplatform project targeting Android, iOS.
 ### Loading users (launch screen → feed)
 
 - **Flow:** `App()` → `MainViewModel` → `MainRepository` → `MainApi` → Ktor `HttpClient`. There is no splash
-  *route*: `App()` shows `SplashContent` until `MainState.isReady`, then crossfades to `NavigationRoot` (feed).
+  *route*: `App()` shows `SplashContent` while `MainViewModel.isLoading`, then crossfades to `NavigationRoot` (feed).
 - **Android** keeps the system splash (`core-splashscreen`) up via `setKeepOnScreenCondition { isLoading }`;
   `MainActivity` passes its `MainViewModel` into `App()` so both observe the same state.
 - **iOS** launch screens are static and can't be held, so `UILaunchScreen` (`LaunchBackground` + `LaunchLogo`, 160pt)
   is followed by `SplashContent`, which draws the same colour and logo at the same size — users see one continuous
-  splash. On failure, an error and Retry button appear under the logo.
+  splash.
 - **Contracts:** `User` and `MainRepository` live in `:core:domain`; `UserDto` (`@Serializable`), the `toDomain()`
-  mapper, `MainApi`, `KtorMainApi` and `KtorMainRepository` live in `:core:data`, so serialization types never leak
+  mapper, `MainApi`, `KtorMainApi` and `OfflineFirstMainRepository` live in `:core:data`, so serialization types never leak
   into domain or presentation.
-- **Last page:** GoRest has no "last page" shortcut and returns 404 for `HEAD`, so `KtorMainApi` GETs page 1, reads the
-  `X-Pagination-Pages` header, then GETs that page.
-- **Cache:** `KtorMainRepository` currently keeps users in an in-memory `StateFlow` (`observeUsers()`); Room will
-  replace it as the offline source of truth.
+- **Latest page instead of last page (deliberate deviation):** the brief asks for the *last* page of `/users`, but
+  GoRest now lists users newest first, so the last page holds the oldest users and a user created from the app would
+  never appear on it. We fetch page 1 (the latest users) in a single request instead: users you add land on that same
+  page, so a refresh keeps them, and it saves the extra request that reading `X-Pagination-Pages` would need.
+- **Offline-first:** Room is the single source of truth. `OfflineFirstMainRepository.loadUsers()` fetches the latest
+  page and swaps it into the table with `UserDao.replaceAll()` (one transaction), so the table always holds exactly that
+  page and needs no local pagination. `observeUsers()` only ever reads the database. A failed fetch leaves the cache
+  untouched.
+- **Startup:** `MainViewModel` only calls the network when the database is empty. With cached users it skips the
+  fetch entirely and opens the feed; if the fetch fails, the feed opens on its empty state. `MainViewModel` exposes
+  a single `isLoading: StateFlow<Boolean>` (no state class), set to `false` once startup is done.
+- **Feed:** `UserFeedViewModel` observes `MainRepository.observeUsers()` and shows the cached list (name + email), or an
+  empty-data state when the table is empty.
+
+### Local database (`:core:database`)
+
+- Room KMP database `SliideDatabase` (v1, schema exported to `core/database/schemas`) with a single table
+  `UsersTable` (`UserEntity`, keyed by the GoRest id) and `UserDao` (`insertAll` with replace-on-conflict,
+  transactional `replaceAll`, `getAll()` as a `Flow` ordered newest-first). Entity ↔ domain mappers live in `:core:data`.
+- `DatabaseFactory.create(builder)` mirrors `HttpClientFactory.create(...)`: shared code sets the bundled SQLite driver
+  and IO dispatcher. Only obtaining the builder is platform-specific (Android needs a `Context` for the file path; iOS
+  uses the Documents directory).
+- `UserDao` is tested against a real in-memory Room database on the iOS simulator target (no Android `Context` needed).
+
+### Dependency injection
+
+Koin modules live only in `:composeApp`, not one per Gradle module: `appModule()` holds app-wide singletons
+(`HttpClient`, `SliideDatabase`, `UserDao`, API, repository, `MainViewModel`), and `userFeedModule()` wires the user
+feed. Core and feature modules stay free of Koin, except presentation modules, which use `koinViewModel()`.
 
 ### Running the apps
 

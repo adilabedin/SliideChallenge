@@ -5,9 +5,9 @@ import com.androidlearning.sliide_challenge.core.domain.util.EmptyResult
 import kotlinx.coroutines.flow.Flow
 
 interface MainRepository {
-    /** Emits the most recently loaded users; empty until [loadUsers] succeeds. */
+    /** Emits the locally cached users (the source of truth); empty until a load has ever succeeded. */
     fun observeUsers(): Flow<List<User>>
 
-    /** Fetches the last page of GoRest `/users` and publishes it to [observeUsers]. */
+    /** Fetches the latest page (page 1, newest first) of GoRest `/users` and replaces the cache with it. On failure the cache is kept. */
     suspend fun loadUsers(): EmptyResult<DataError.Network>
 }
