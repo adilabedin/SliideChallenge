@@ -8,7 +8,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 
-/** Renders whatever is cached; [MainRepository] keeps the cache in sync with the latest GoRest page. */
+/** Renders whatever is cached; [MainRepository] keeps the cache in sync with the last GoRest page. */
 class UserFeedViewModel(
     mainRepository: MainRepository,
 ) : ViewModel() {

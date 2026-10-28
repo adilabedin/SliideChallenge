@@ -39,11 +39,10 @@ This is a Kotlin Multiplatform project targeting Android, iOS.
 - **Contracts:** `User` and `MainRepository` live in `:core:domain`; `UserDto` (`@Serializable`), the `toDomain()`
   mapper, `MainApi`, `KtorMainApi` and `OfflineFirstMainRepository` live in `:core:data`, so serialization types never leak
   into domain or presentation.
-- **Latest page instead of last page (deliberate deviation):** the brief asks for the *last* page of `/users`, but
-  GoRest now lists users newest first, so the last page holds the oldest users and a user created from the app would
-  never appear on it. We fetch page 1 (the latest users) in a single request instead: users you add land on that same
-  page, so a refresh keeps them, and it saves the extra request that reading `X-Pagination-Pages` would need.
-- **Offline-first:** Room is the single source of truth. `OfflineFirstMainRepository.loadUsers()` fetches the latest
+- **Last page:** `KtorMainApi.getLastPageUsers()` fetches page 1 to read the `x-pagination-pages` header, then requests
+  that page (both with `per_page=20`). `HttpClient.getWithHeaders` is the header-preserving variant of `get`; it goes
+  through the same `safeCall` status/exception mapping. See *Assumptions & trade-offs* for why it works this way.
+- **Offline-first:** Room is the single source of truth. `OfflineFirstMainRepository.loadUsers()` fetches the last
   page and swaps it into the table with `UserDao.replaceAll()` (one transaction), so the table always holds exactly that
   page and needs no local pagination. `observeUsers()` only ever reads the database. A failed fetch leaves the cache
   untouched.
@@ -65,9 +64,45 @@ This is a Kotlin Multiplatform project targeting Android, iOS.
 
 ### Dependency injection
 
-Koin modules live only in `:composeApp`, not one per Gradle module: `appModule()` holds app-wide singletons
-(`HttpClient`, `SliideDatabase`, `UserDao`, API, repository, `MainViewModel`), and `userFeedModule()` wires the user
-feed. Core and feature modules stay free of Koin, except presentation modules, which use `koinViewModel()`.
+- **Core is wired in the app.** `appModule()` in `:composeApp` registers the `HttpClient`, `SliideDatabase`, `UserDao`,
+  API, repository and `MainViewModel` (which lives in `:core:presentation`). Core is fixed and `:composeApp` already
+  depends on every core module, so per-layer core modules would add files without adding isolation. Two bindings could
+  only live in the app anyway: the `HttpClient` needs `BuildKonfig.API_KEY`, and the Android database builder needs the
+  app `Context`.
+- **Features own their module.** `userFeedPresentationModule()` lives in `:userfeed:presentation`, so a feature can be
+  added or removed without the app knowing its internals. `initKoin` only lists modules.
+- Core data and database modules stay free of Koin.
+
+## Assumptions & trade-offs
+
+- **"Last page" means the final page of `/users`.** Confirmed with Sliide. GoRest lists users newest first, so the last
+  page holds the oldest users.
+- **Two requests to find it.** GoRest only reports the page count in the `x-pagination-pages` response header, and its
+  `x-links-*` headers don't include a "last" link. So we fetch page 1, read the count, then fetch that page. A single
+  request isn't possible without guessing.
+- **`per_page=20`, sent on both requests.** The page count depends on the page size, so both calls must agree. GoRest
+  accepts up to 100 and silently falls back to 10 above that. The trade-off: the last page holds `total % 20` users
+  (anywhere from 1 to 20), so the feed can be short. We accept that because it's what "last page" literally means.
+- **The dataset can change between the two requests.** GoRest is shared and constantly written to. If it shrinks, the
+  requested page returns `[]` with the new count in the header; we retry that page once. A missing or unreadable count
+  is reported as an error rather than guessing a page.
+- **Created users are local only.** Confirmed with Sliide: other devices don't need to see them. A user created
+  from the app (201) is stored in Room and shown at the top immediately; GoRest ids increase, and the feed sorts by
+  `id DESC`.
+- **Created users live in their own permanent table.** GoRest puts new users on page 1, so they never come back in
+  the last page we fetch, and a refresh replaces `UsersTable`. `CreatedUsersTable` keeps every user created on this
+  device (with a nullable `remoteId` until the POST succeeds) and is never cleared by a refresh or a sync; the feed
+  shows it above the fetched page.
+- **Pending syncs: one table per operation (create / update / delete).** Modelled on the Tasky project, but split
+  because the three have different shapes: a pending create only needs the created row's `localId` (its payload stays
+  on that row), a pending update stores the latest edit keyed by server id (upsert, so only the newest edit is sent),
+  and a pending delete is just the server id. A row is removed only after its request succeeds. Editing or deleting a
+  user that hasn't been POSTed yet changes or removes the created row in place, so nothing is queued for it. Pending
+  updates/deletes are exposed as `Flow`s so the feed can overlay them on server rows a refresh would otherwise restore.
+- **Schema stays at version 1 during development.** The app isn't released, so schema changes edit version 1 in
+  place and require reinstalling the app instead of carrying migrations.
+- **Startup fetches only when the cache is empty.** This keeps launch instant and offline-friendly, at the cost of
+  showing a cached page until the user refreshes.
 
 ### Running the apps
 

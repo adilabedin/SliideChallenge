@@ -20,7 +20,7 @@ class OfflineFirstMainRepositoryTest {
 
     private class FakeMainApi : MainApi {
         var result: Result<List<UserDto>, DataError.Network> = Result.Success(emptyList())
-        override suspend fun getLatestUsers() = result
+        override suspend fun getLastPageUsers() = result
     }
 
     private class FakeUserDao : UserDao {

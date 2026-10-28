@@ -14,7 +14,7 @@ import kotlinx.coroutines.flow.map
 
 /**
  * Room is the single source of truth: [observeUsers] always reads the cache, and [loadUsers]
- * replaces the cache with the latest GoRest page. A failed fetch leaves the cache untouched.
+ * replaces the cache with the last GoRest page. A failed fetch leaves the cache untouched.
  */
 class OfflineFirstMainRepository(
     private val mainApi: MainApi,
@@ -25,7 +25,7 @@ class OfflineFirstMainRepository(
         userDao.getAll().map { entities -> entities.map(UserEntity::toDomain) }
 
     override suspend fun loadUsers(): EmptyResult<DataError.Network> {
-        return mainApi.getLatestUsers()
+        return mainApi.getLastPageUsers()
             .map { dtos -> dtos.map { it.toDomain().toEntity() } }
             .onSuccess { entities -> userDao.replaceAll(entities) }
             .asEmptyResult()

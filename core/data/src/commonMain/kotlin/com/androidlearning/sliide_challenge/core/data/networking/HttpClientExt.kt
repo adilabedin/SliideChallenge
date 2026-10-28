@@ -2,6 +2,7 @@ package com.androidlearning.sliide_challenge.core.data.networking
 
 import com.androidlearning.sliide_challenge.core.domain.util.DataError
 import com.androidlearning.sliide_challenge.core.domain.util.Result
+import com.androidlearning.sliide_challenge.core.domain.util.map
 import io.ktor.client.HttpClient
 import io.ktor.client.call.NoTransformationFoundException
 import io.ktor.client.call.body
@@ -15,6 +16,7 @@ import io.ktor.client.request.post
 import io.ktor.client.request.setBody
 import io.ktor.client.request.url
 import io.ktor.client.statement.HttpResponse
+import io.ktor.http.Headers
 import io.ktor.serialization.ContentConvertException
 import kotlinx.serialization.SerializationException
 import kotlin.coroutines.cancellation.CancellationException
@@ -29,6 +31,20 @@ suspend inline fun <reified Response : Any> HttpClient.get(
             queryParameters.forEach { (key, value) -> parameter(key, value) }
         }
     }
+}
+
+/** Like [get], but keeps the response headers. Status and exception mapping are unchanged. */
+suspend inline fun <reified Response : Any> HttpClient.getWithHeaders(
+    route: String,
+    queryParameters: Map<String, Any?> = mapOf(),
+): Result<NetworkResponse<Response>, DataError.Network> {
+    var headers: Headers = Headers.Empty
+    return safeCall<Response> {
+        get {
+            url(constructRoute(route))
+            queryParameters.forEach { (key, value) -> parameter(key, value) }
+        }.also { headers = it.headers }
+    }.map { body -> NetworkResponse(body, headers) }
 }
 
 suspend inline fun <reified Request, reified Response : Any> HttpClient.post(

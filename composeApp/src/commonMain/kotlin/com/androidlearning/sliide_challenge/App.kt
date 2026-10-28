@@ -5,8 +5,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.androidlearning.sliide_challenge.core.designsystem.theme.SliideTheme
+import com.androidlearning.sliide_challenge.core.presentation.splash.MainViewModel
 import com.androidlearning.sliide_challenge.navigation.NavigationRoot
-import com.androidlearning.sliide_challenge.splash.MainViewModel
 import com.androidlearning.sliide_challenge.splash.SplashContent
 import org.koin.compose.viewmodel.koinViewModel
 

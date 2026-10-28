@@ -1,0 +1,27 @@
+package com.androidlearning.sliide_challenge.core.database.user
+
+import androidx.room.Dao
+import androidx.room.Query
+import androidx.room.Upsert
+import com.androidlearning.sliide_challenge.core.database.DatabaseConstants
+import kotlinx.coroutines.flow.Flow
+
+@Dao
+interface CreatedUserDao {
+    /** Returns the row id, which is the generated [CreatedUserEntity.localId] for a new user. */
+    @Upsert
+    suspend fun upsert(user: CreatedUserEntity): Long
+
+    /** Newest creation first, so they can be shown above the fetched page. */
+    @Query("SELECT * FROM ${DatabaseConstants.CREATED_USERS_TABLE} ORDER BY createdAt DESC, localId DESC")
+    fun getAll(): Flow<List<CreatedUserEntity>>
+
+    @Query("SELECT * FROM ${DatabaseConstants.CREATED_USERS_TABLE} WHERE localId = :localId")
+    suspend fun getByLocalId(localId: Long): CreatedUserEntity?
+
+    @Query("UPDATE ${DatabaseConstants.CREATED_USERS_TABLE} SET remoteId = :remoteId WHERE localId = :localId")
+    suspend fun setRemoteId(localId: Long, remoteId: Long)
+
+    @Query("DELETE FROM ${DatabaseConstants.CREATED_USERS_TABLE} WHERE localId = :localId")
+    suspend fun deleteByLocalId(localId: Long)
+}

@@ -1,4 +1,4 @@
-package com.androidlearning.sliide_challenge.splash
+package com.androidlearning.sliide_challenge.core.presentation.splash
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -11,7 +11,7 @@ import kotlinx.coroutines.launch
 
 /**
  * Prepares startup data. While [isLoading] is true, Android keeps the system splash on
- * screen and iOS shows [SplashContent], which mirrors the native launch screen.
+ * screen and iOS shows the app's `SplashContent`, which mirrors the native launch screen.
  *
  * The database is the source of truth: the network is only hit when nothing is cached. If that
  * fetch fails the feed opens on its empty state.

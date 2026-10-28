@@ -8,7 +8,7 @@ import com.androidlearning.sliide_challenge.core.data.user.OfflineFirstMainRepos
 import com.androidlearning.sliide_challenge.core.database.DatabaseFactory
 import com.androidlearning.sliide_challenge.core.database.SliideDatabase
 import com.androidlearning.sliide_challenge.core.domain.user.MainRepository
-import com.androidlearning.sliide_challenge.splash.MainViewModel
+import com.androidlearning.sliide_challenge.core.presentation.splash.MainViewModel
 import org.koin.core.module.Module
 import org.koin.core.module.dsl.singleOf
 import org.koin.core.module.dsl.viewModelOf

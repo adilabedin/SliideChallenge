@@ -1,4 +1,4 @@
-package com.androidlearning.sliide_challenge.splash
+package com.androidlearning.sliide_challenge.core.presentation.splash
 
 import assertk.assertThat
 import assertk.assertions.isEqualTo

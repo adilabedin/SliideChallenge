@@ -8,6 +8,6 @@ interface MainRepository {
     /** Emits the locally cached users (the source of truth); empty until a load has ever succeeded. */
     fun observeUsers(): Flow<List<User>>
 
-    /** Fetches the latest page (page 1, newest first) of GoRest `/users` and replaces the cache with it. On failure the cache is kept. */
+    /** Fetches the last page of GoRest `/users` and replaces the cache with it. On failure the cache is kept. */
     suspend fun loadUsers(): EmptyResult<DataError.Network>
 }
