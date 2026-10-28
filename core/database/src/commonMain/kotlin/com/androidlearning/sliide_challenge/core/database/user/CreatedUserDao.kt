@@ -23,8 +23,16 @@ interface CreatedUserDao {
     @Query("UPDATE ${DatabaseConstants.CREATED_USERS_TABLE} SET name = :name, email = :email WHERE localId = :localId")
     suspend fun updateDetails(localId: Long, name: String, email: String)
 
-    @Query("UPDATE ${DatabaseConstants.CREATED_USERS_TABLE} SET remoteId = :remoteId WHERE localId = :localId")
-    suspend fun setRemoteId(localId: Long, remoteId: Long)
+    /** Records the 201: the user now has a GoRest id and was in sync at [syncedAt]. */
+    @Query(
+        "UPDATE ${DatabaseConstants.CREATED_USERS_TABLE} SET remoteId = :remoteId, lastSyncedAt = :syncedAt " +
+            "WHERE localId = :localId",
+    )
+    suspend fun setRemoteId(localId: Long, remoteId: Long, syncedAt: Long)
+
+    /** Records a successful PATCH, which addresses the user by its GoRest id. */
+    @Query("UPDATE ${DatabaseConstants.CREATED_USERS_TABLE} SET lastSyncedAt = :syncedAt WHERE remoteId = :remoteId")
+    suspend fun setLastSyncedAt(remoteId: Long, syncedAt: Long)
 
     @Query("DELETE FROM ${DatabaseConstants.CREATED_USERS_TABLE} WHERE localId = :localId")
     suspend fun deleteByLocalId(localId: Long)

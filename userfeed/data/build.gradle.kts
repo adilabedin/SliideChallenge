@@ -12,6 +12,9 @@ kotlin {
             implementation(projects.userfeed.database)
             implementation(libs.koin.core)
         }
+        androidMain.dependencies {
+            implementation(libs.koin.androidx.workmanager)
+        }
         commonTest.dependencies {
             implementation(libs.ktor.client.mock)
         }

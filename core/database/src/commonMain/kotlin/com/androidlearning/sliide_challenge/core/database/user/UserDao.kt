@@ -5,7 +5,6 @@ import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Transaction
-import androidx.room.Update
 import com.androidlearning.sliide_challenge.core.database.DatabaseConstants
 import kotlinx.coroutines.flow.Flow
 
@@ -15,9 +14,15 @@ interface UserDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertAll(users: List<UserEntity>)
 
-    /** Writes a local edit of a cached user; does nothing if a refresh has already dropped the row. */
-    @Update
-    suspend fun update(user: UserEntity)
+    /**
+     * Writes an edit of a cached user without touching [UserEntity.lastSyncedAt]; does nothing if a refresh has already
+     * dropped the row.
+     */
+    @Query("UPDATE ${DatabaseConstants.USERS_TABLE} SET name = :name, email = :email WHERE id = :id")
+    suspend fun updateDetails(id: Long, name: String, email: String)
+
+    @Query("UPDATE ${DatabaseConstants.USERS_TABLE} SET lastSyncedAt = :syncedAt WHERE id = :id")
+    suspend fun setLastSyncedAt(id: Long, syncedAt: Long)
 
     @Query("DELETE FROM ${DatabaseConstants.USERS_TABLE} WHERE id = :id")
     suspend fun deleteById(id: Long)

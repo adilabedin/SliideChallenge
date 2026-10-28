@@ -22,9 +22,11 @@ fun appModule(): Module =
         single { get<SliideDatabase>().userDao() }
         single { get<SliideDatabase>().createdUserDao() }
         single { get<SliideDatabase>().userPendingSyncDao() }
+        single { get<SliideDatabase>().rejectedCreationDao() }
 
         singleOf(::KtorMainApi) bind MainApi::class
-        singleOf(::OfflineFirstMainRepository) bind MainRepository::class
+        // Explicit constructor call so the default `Clock` is used instead of being resolved from Koin.
+        single<MainRepository> { OfflineFirstMainRepository(get(), get()) }
 
         viewModelOf(::MainViewModel)
     }

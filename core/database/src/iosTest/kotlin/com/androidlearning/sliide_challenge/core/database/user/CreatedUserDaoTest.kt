@@ -58,18 +58,32 @@ class CreatedUserDaoTest {
     }
 
     @Test
-    fun setRemoteId_keepsRecordAndStoresServerId() = runTest {
+    fun setRemoteId_keepsRecordAndStoresServerIdAndSyncTime() = runTest {
         val localId = dao.upsert(createdUser())
 
-        dao.setRemoteId(localId, remoteId = 42)
+        dao.setRemoteId(localId, remoteId = 42, syncedAt = 5_000)
 
-        assertThat(dao.getByLocalId(localId)?.remoteId).isEqualTo(42L)
+        val user = dao.getByLocalId(localId)!!
+        assertThat(user.remoteId).isEqualTo(42L)
+        assertThat(user.lastSyncedAt).isEqualTo(5_000L)
+    }
+
+    @Test
+    fun setLastSyncedAt_matchesByRemoteId() = runTest {
+        val syncedId = dao.upsert(createdUser(name = "Synced"))
+        val unsyncedId = dao.upsert(createdUser(name = "Unsynced"))
+        dao.setRemoteId(syncedId, remoteId = 42, syncedAt = 1_000)
+
+        dao.setLastSyncedAt(remoteId = 42, syncedAt = 5_000)
+
+        assertThat(dao.getByLocalId(syncedId)?.lastSyncedAt).isEqualTo(5_000L)
+        assertThat(dao.getByLocalId(unsyncedId)?.lastSyncedAt).isNull()
     }
 
     @Test
     fun updateDetails_changesNameAndEmailButKeepsRemoteId() = runTest {
         val localId = dao.upsert(createdUser())
-        dao.setRemoteId(localId, remoteId = 42)
+        dao.setRemoteId(localId, remoteId = 42, syncedAt = 1_000)
 
         dao.updateDetails(localId, name = "New", email = "new@example.com")
 

@@ -11,6 +11,11 @@ class UserEntityMapperTest {
     fun `user survives a round trip through the entity`() {
         val user = User(1, "Ada", "ada@x.io")
 
-        assertThat(user.toEntity().toDomain()).isEqualTo(user)
+        assertThat(user.toEntity(syncedAt = 1_000).toDomain()).isEqualTo(user)
+    }
+
+    @Test
+    fun `entity is stamped with the sync time`() {
+        assertThat(User(1, "Ada", "ada@x.io").toEntity(syncedAt = 1_000).lastSyncedAt).isEqualTo(1_000L)
     }
 }

@@ -15,6 +15,8 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
+import kotlin.time.Clock
+import kotlin.time.Instant
 
 class OfflineFirstMainRepositoryTest {
 
@@ -30,8 +32,12 @@ class OfflineFirstMainRepositoryTest {
             rows.value += users.associateBy { it.id }
         }
 
-        override suspend fun update(user: UserEntity) {
-            if (user.id in rows.value) rows.value += user.id to user
+        override suspend fun updateDetails(id: Long, name: String, email: String) {
+            rows.value[id]?.let { rows.value += id to it.copy(name = name, email = email) }
+        }
+
+        override suspend fun setLastSyncedAt(id: Long, syncedAt: Long) {
+            rows.value[id]?.let { rows.value += id to it.copy(lastSyncedAt = syncedAt) }
         }
 
         override suspend fun deleteById(id: Long) {
@@ -52,7 +58,14 @@ class OfflineFirstMainRepositoryTest {
 
     private val api = FakeMainApi()
     private val dao = FakeUserDao()
-    private val repository = OfflineFirstMainRepository(api, dao)
+    private var now = Instant.fromEpochMilliseconds(1_000)
+    private val repository = OfflineFirstMainRepository(
+        mainApi = api,
+        userDao = dao,
+        clock = object : Clock {
+            override fun now() = this@OfflineFirstMainRepositoryTest.now
+        },
+    )
 
     private val ada = UserDto(1, "Ada", "ada@x.io")
     private val alan = UserDto(2, "Alan", "alan@x.io")
@@ -80,6 +93,18 @@ class OfflineFirstMainRepositoryTest {
         repository.loadUsers()
 
         assertThat(repository.observeUsers().first().map { it.id }).isEqualTo(listOf(2L))
+    }
+
+    @Test
+    fun `successful load stamps every cached row with the fetch time`() = runTest {
+        api.result = Result.Success(listOf(ada))
+        repository.loadUsers()
+
+        now = Instant.fromEpochMilliseconds(5_000)
+        api.result = Result.Success(listOf(ada, alan))
+        repository.loadUsers()
+
+        assertThat(dao.rows.value.values.map { it.lastSyncedAt }).isEqualTo(listOf(5_000L, 5_000L))
     }
 
     @Test

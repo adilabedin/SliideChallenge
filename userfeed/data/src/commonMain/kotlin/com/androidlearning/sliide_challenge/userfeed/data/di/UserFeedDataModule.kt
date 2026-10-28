@@ -14,5 +14,5 @@ fun userFeedDataModule(): Module =
     module {
         singleOf(::KtorUserFeedApi) bind UserFeedApi::class
         // Explicit constructor call so the default `Clock` is used instead of being resolved from Koin.
-        single<UserFeedRepository> { OfflineFirstUserFeedRepository(get(), get(), get(), get()) }
+        single<UserFeedRepository> { OfflineFirstUserFeedRepository(get(), get(), get(), get(), get()) }
     }

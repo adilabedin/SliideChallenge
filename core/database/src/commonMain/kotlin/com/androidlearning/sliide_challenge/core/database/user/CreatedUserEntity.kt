@@ -9,7 +9,9 @@ import com.androidlearning.sliide_challenge.core.database.DatabaseConstants
  * fetch, so this table is the only place they can be read back from; it is never cleared by a refresh or a sync.
  *
  * [remoteId] is null until the create has been POSTed (see [CreateUserPendingSyncEntity]).
- * [createdAt] is epoch milliseconds, used for ordering and the relative timestamp.
+ * [createdAt] is epoch milliseconds, used for ordering.
+ * [lastSyncedAt] is epoch milliseconds of the last time GoRest accepted this user (its POST or a later PATCH); null
+ * until the create has been POSTed.
  */
 @Entity(tableName = DatabaseConstants.CREATED_USERS_TABLE)
 data class CreatedUserEntity(
@@ -18,4 +20,5 @@ data class CreatedUserEntity(
     val name: String,
     val email: String,
     val createdAt: Long,
+    val lastSyncedAt: Long? = null,
 )

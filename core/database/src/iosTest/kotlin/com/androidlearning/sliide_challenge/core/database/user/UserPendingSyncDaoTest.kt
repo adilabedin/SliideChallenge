@@ -5,6 +5,8 @@ import assertk.assertThat
 import assertk.assertions.containsExactly
 import assertk.assertions.containsExactlyInAnyOrder
 import assertk.assertions.isEmpty
+import assertk.assertions.isFalse
+import assertk.assertions.isTrue
 import com.androidlearning.sliide_challenge.core.database.DatabaseFactory
 import com.androidlearning.sliide_challenge.core.database.SliideDatabase
 import kotlinx.coroutines.flow.first
@@ -75,6 +77,24 @@ class UserPendingSyncDaoTest {
     }
 
     @Test
+    fun updatePendingSync_deleteWithMatchingTimestamp_removesEntry() = runTest {
+        dao.upsertUpdatePendingSync(update(userId = 7, updatedAt = 1_000))
+
+        dao.deleteUpdatePendingSyncIfUnchanged(userId = 7, updatedAt = 1_000)
+
+        assertThat(dao.getUpdatePendingSyncs()).isEmpty()
+    }
+
+    @Test
+    fun updatePendingSync_deleteWithOlderTimestamp_keepsNewerEdit() = runTest {
+        dao.upsertUpdatePendingSync(update(userId = 7, name = "Newer", updatedAt = 2_000))
+
+        dao.deleteUpdatePendingSyncIfUnchanged(userId = 7, updatedAt = 1_000)
+
+        assertThat(dao.getUpdatePendingSyncs()).containsExactly(update(userId = 7, name = "Newer", updatedAt = 2_000))
+    }
+
+    @Test
     fun deletePendingSync_upsertTwice_keepsOneEntry() = runTest {
         dao.upsertDeletePendingSync(DeleteUserPendingSyncEntity(userId = 7))
         dao.upsertDeletePendingSync(DeleteUserPendingSyncEntity(userId = 7))
@@ -91,6 +111,25 @@ class UserPendingSyncDaoTest {
         dao.deleteDeletePendingSync(userId = 7)
 
         assertThat(dao.getDeletePendingSyncs()).containsExactly(DeleteUserPendingSyncEntity(userId = 8))
+    }
+
+    @Test
+    fun hasPendingSyncs_emptyQueues_isFalse() = runTest {
+        assertThat(dao.observeHasPendingSyncs().first()).isFalse()
+    }
+
+    @Test
+    fun hasPendingSyncs_anyQueueNonEmpty_isTrue() = runTest {
+        dao.upsertCreatePendingSync(CreateUserPendingSyncEntity(localId = 1))
+        assertThat(dao.observeHasPendingSyncs().first()).isTrue()
+        dao.deleteCreatePendingSync(localId = 1)
+
+        dao.upsertUpdatePendingSync(update(userId = 7))
+        assertThat(dao.observeHasPendingSyncs().first()).isTrue()
+        dao.deleteUpdatePendingSync(userId = 7)
+
+        dao.upsertDeletePendingSync(DeleteUserPendingSyncEntity(userId = 8))
+        assertThat(dao.observeHasPendingSyncs().first()).isTrue()
     }
 
     private fun update(userId: Long, name: String = "User $userId", updatedAt: Long = 1_000) =

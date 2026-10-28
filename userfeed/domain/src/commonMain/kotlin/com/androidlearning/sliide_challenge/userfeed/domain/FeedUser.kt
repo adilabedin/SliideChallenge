@@ -1,10 +1,16 @@
 package com.androidlearning.sliide_challenge.userfeed.domain
 
-/** A row of the user feed: either a user created on this device or one from the fetched GoRest page. */
+import kotlin.time.Instant
+
+/**
+ * A row of the user feed: either a user created on this device or one from the fetched GoRest page.
+ * [lastSyncedAt] is when the row last matched the server, or null while it has a create or edit still waiting to sync.
+ */
 data class FeedUser(
     val id: FeedUserId,
     val name: String,
     val email: String,
+    val lastSyncedAt: Instant?,
 )
 
 /**

@@ -29,7 +29,6 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.androidlearning.sliide_challenge.core.designsystem.theme.SliideTheme
-import com.androidlearning.sliide_challenge.userfeed.domain.FeedUser
 import com.androidlearning.sliide_challenge.userfeed.domain.FeedUserId
 import org.koin.compose.viewmodel.koinViewModel
 
@@ -62,14 +61,27 @@ fun UserFeedScreen(
 
 @Composable
 private fun UserList(
-    users: List<FeedUser>,
+    users: List<FeedUserUi>,
     modifier: Modifier = Modifier,
 ) {
     LazyColumn(modifier = modifier) {
         items(items = users, key = { it.id.listKey() }) { user ->
             ListItem(
                 headlineContent = { Text(user.name) },
-                supportingContent = { Text(user.email) },
+                supportingContent = {
+                    Column {
+                        Text(user.email)
+                        Text(
+                            text = user.syncStatus,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = if (user.isSynced) {
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            } else {
+                                MaterialTheme.colorScheme.tertiary
+                            },
+                        )
+                    }
+                },
             )
             HorizontalDivider()
         }
@@ -121,9 +133,9 @@ private fun UserFeedScreenPreview() {
             state = UserFeedState(
                 isLoading = false,
                 users = listOf(
-                    FeedUser(FeedUserId.Created(1), "Grace Hopper", "grace@example.com"),
-                    FeedUser(FeedUserId.Remote(2), "Alan Turing", "alan@example.com"),
-                    FeedUser(FeedUserId.Remote(1), "Ada Lovelace", "ada@example.com"),
+                    FeedUserUi(FeedUserId.Created(1), "Grace Hopper", "grace@example.com", "Not synced", false),
+                    FeedUserUi(FeedUserId.Remote(2), "Alan Turing", "alan@example.com", "Synced just now", true),
+                    FeedUserUi(FeedUserId.Remote(1), "Ada Lovelace", "ada@example.com", "Synced 5 minutes ago", true),
                 ),
             ),
         )

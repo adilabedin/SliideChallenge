@@ -49,8 +49,13 @@ This is a Kotlin Multiplatform project targeting Android, iOS.
 - **Startup:** `MainViewModel` only calls the network when the database is empty. With cached users it skips the
   fetch entirely and opens the feed; if the fetch fails, the feed opens on its empty state. `MainViewModel` exposes
   a single `isLoading: StateFlow<Boolean>` (no state class), set to `false` once startup is done.
-- **Feed:** `UserFeedViewModel` observes `UserFeedRepository.observeUsers()` and shows the list (name + email), or an
-  empty-data state when there are no users.
+- **Feed:** `UserFeedViewModel` observes `UserFeedRepository.observeUsers()` and shows the list (name, email and sync
+  status), or an empty-data state when there are no users.
+- **Relative timestamp = last sync.** Each row reads "Synced 5 minutes ago", or "Not synced" while it has a create or
+  edit waiting in the pending-sync queue. `users.lastSyncedAt` is stamped by a refresh and by a successful PATCH;
+  `created_users.lastSyncedAt` by the 201 and by a successful PATCH. `FeedUser.lastSyncedAt` is null whenever a change
+  is pending. `formatSyncStatus()` (shared, pure) turns it into text against a `Clock`, and the ViewModel re-reads the
+  clock every minute while the feed is observed, so labels keep moving.
 
 ### Creating, editing and deleting users (`:userfeed`)
 
@@ -69,6 +74,42 @@ This is a Kotlin Multiplatform project targeting Android, iOS.
   go to the server like any other user.
 - **Queued edits never go stale.** A successful PATCH drops any older queued edit for that user, and deleting a user
   drops its queued edit whether or not the DELETE succeeds.
+
+### Background sync (WorkManager on Android, BGTaskScheduler on iOS)
+
+- **Every 30 minutes, only while online and only while something is pending.** `PendingSyncScheduling` (shared code)
+  watches `observeHasPendingSyncs()` (one Room query over the three pending tables) and schedules the sync whenever
+  changes start pending. Only a finished sync cancels it, and only once nothing is left, so nothing wakes up for an
+  empty queue. The observer never cancels: the queue can empty mid-sync (deleting a created user whose POST is in
+  flight), and cancelling then would stop the worker before it queues the follow-up DELETE. A change queued just as
+  the cancel goes through reschedules it. A schedule left over from an earlier run with an empty queue runs once and
+  cancels itself.
+  `WorkManagerUserSyncScheduler` enqueues a unique 30-minute periodic `UserSyncWorker` with a `CONNECTED` network
+  constraint and `KEEP`, so an app restart doesn't reset the period. The first run happens as soon as a network is
+  available.
+- **The sync logic is shared; only scheduling is per platform.** `UserFeedRepository.syncPendingChanges()` and
+  `PendingSyncScheduling` live in common code and are unit-tested on both targets. `UserSyncScheduler` is a domain
+  interface with a WorkManager implementation (Android) and a `BGTaskScheduler` one (iOS), each wired by a
+  platform-specific `userFeedSyncModule()`.
+- **iOS: background app refresh plus a sync whenever the app becomes active.** `BackgroundTaskUserSyncScheduler`
+  books a `BGAppRefreshTaskRequest` for no earlier than 30 minutes ahead. iOS decides when it actually runs (based on
+  battery and how often the app is used), never runs it after the user force-quits the app, and simulators don't run
+  it at all. So `IosUserSync` also syncs on every `UIApplicationDidBecomeActiveNotification`, which includes launch.
+  An iOS request is used up once it launches, so each background run books the next one first, then syncs. The task
+  handler must be registered before launch finishes, so Swift's `iOSApp.init()` calls `startIosApp()`, which starts
+  Koin (`MainViewController` no longer does). The identifier is listed in `Info.plist`
+  (`BGTaskSchedulerPermittedIdentifiers`, `UIBackgroundModes: fetch`).
+- **Syncs never overlap.** A foreground and a background sync can run at the same time on iOS, so
+  `syncPendingChanges()` holds a `Mutex`; otherwise both would send the same queued changes.
+- **Order: creates, then edits, then deletes.** Each item is sent on its own, so one failure doesn't block the rest.
+  A user created offline and then edited or deleted while its POST was in flight gets that edit or delete queued
+  straight after the 201, and it is sent in the same run.
+- **A queued edit is cleared only if it is still the one that was sent** (matched on `updatedAt`), so a newer edit
+  made during the PATCH is kept.
+- **WorkManager is initialized by Koin** (`workManagerFactory()` in `SliideApplication`, with the default initializer
+  removed in the manifest), so the worker gets the repository by constructor injection. The worker returns `failure()`
+  rather than `retry()`: failed items stay queued, and WorkManager resets periodic work to its next period after a
+  failure (checked in `WorkerWrapper`) instead of marking it failed.
 
 ### Local database (`:core:database`)
 
@@ -121,11 +162,23 @@ This is a Kotlin Multiplatform project targeting Android, iOS.
 - **Creates send placeholder `gender` and `status`.** GoRest rejects a create without them (422), but the brief's form
   only has name and email, so `KtorUserFeedApi` sends `gender = "female"`, `status = "active"`. They are passed
   explicitly rather than as DTO defaults, because the JSON encoder omits properties left at their default value.
-- **Every failed request is queued for now, including 4xx.** The pending-sync tables don't distinguish failures yet.
-  Retrying a 422 (e.g. "email has already been taken") can never succeed, so when the sync logic is written it should
-  only retry transient errors (no internet, timeouts, 5xx, 429) and treat a 404 on DELETE as done.
+- **A failed sync keeps the change queued; only success removes it.** There are two exceptions:
+  - A 404 on a queued edit or delete means the user is already gone from GoRest, so the change is dropped.
+  - A 422 on a create (GoRest refuses the user, in practice because the email is already taken) can never succeed.
+    So the created user is removed and recorded in `RejectedCreationsTable`, whether the 422 comes back on the first
+    POST or in a later sync. The UI reads `observeRejectedCreations()` to show a snackbar and then calls
+    `dismissRejectedCreation()`. The record is persisted because the rejection can arrive from a background sync
+    while the app is closed. A foreground create that gets a 422 also returns the error, but the snackbar should come
+    only from the rejections flow so it isn't shown twice.
+  - A 422 on a queued edit is still retried every 30 minutes until the user edits or deletes that user again.
+- **iOS sync timing is best-effort.** iOS can't guarantee a 30-minute cadence, which is why the app also syncs
+  whenever it becomes active.
 - **Schema stays at version 1 during development.** The app isn't released, so schema changes edit version 1 in
   place and require reinstalling the app instead of carrying migrations.
+- **The timestamp is when the row last matched the server, not when the user was created.** GoRest returns no
+  timestamps (`id`, `name`, `email`, `gender`, `status` only), so creation time is unknowable for fetched users. Sync
+  time is honest offline: unsynced changes read "Not synced" instead of a misleading age. The cost: rows from one
+  refresh all share the same time.
 - **Startup fetches only when the cache is empty.** This keeps launch instant and offline-friendly, at the cost of
   showing a cached page until the user refreshes.
 

@@ -3,10 +3,12 @@ package com.androidlearning.sliide_challenge.core.data.user
 import com.androidlearning.sliide_challenge.core.database.user.UserEntity
 import com.androidlearning.sliide_challenge.core.domain.user.User
 
-fun User.toEntity(): UserEntity = UserEntity(
+/** [syncedAt] is epoch milliseconds of the fetch that returned this user. */
+fun User.toEntity(syncedAt: Long): UserEntity = UserEntity(
     id = id,
     name = name,
     email = email,
+    lastSyncedAt = syncedAt,
 )
 
 fun UserEntity.toDomain(): User = User(

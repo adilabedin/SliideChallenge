@@ -62,19 +62,31 @@ class UserDaoTest {
     }
 
     @Test
-    fun update_existingId_replacesOnlyThatRow() = runTest {
+    fun updateDetails_editsOnlyThatRowAndKeepsSyncTime() = runTest {
         dao.insertAll(listOf(user(id = 1), user(id = 2)))
 
-        dao.update(user(id = 1, name = "Edited"))
+        dao.updateDetails(id = 1, name = "Edited", email = "edited@example.com")
 
-        assertThat(dao.getAll().first()).containsExactly(user(id = 2), user(id = 1, name = "Edited"))
+        assertThat(dao.getAll().first()).containsExactly(
+            user(id = 2),
+            user(id = 1, name = "Edited").copy(email = "edited@example.com"),
+        )
     }
 
     @Test
-    fun update_missingId_doesNotInsert() = runTest {
-        dao.update(user(id = 1))
+    fun updateDetails_missingId_doesNotInsert() = runTest {
+        dao.updateDetails(id = 1, name = "Edited", email = "edited@example.com")
 
         assertThat(dao.getAll().first()).isEmpty()
+    }
+
+    @Test
+    fun setLastSyncedAt_changesOnlyThatRow() = runTest {
+        dao.insertAll(listOf(user(id = 1), user(id = 2)))
+
+        dao.setLastSyncedAt(id = 1, syncedAt = 5_000)
+
+        assertThat(dao.getAll().first()).containsExactly(user(id = 2), user(id = 1, lastSyncedAt = 5_000))
     }
 
     @Test
@@ -86,9 +98,10 @@ class UserDaoTest {
         assertThat(dao.getAll().first()).containsExactly(user(id = 2))
     }
 
-    private fun user(id: Long, name: String = "User $id") = UserEntity(
+    private fun user(id: Long, name: String = "User $id", lastSyncedAt: Long = 1_000) = UserEntity(
         id = id,
         name = name,
         email = "user$id@example.com",
+        lastSyncedAt = lastSyncedAt,
     )
 }

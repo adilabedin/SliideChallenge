@@ -11,14 +11,17 @@ import com.androidlearning.sliide_challenge.core.domain.util.map
 import com.androidlearning.sliide_challenge.core.domain.util.onSuccess
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import kotlin.time.Clock
 
 /**
  * Room is the single source of truth: [observeUsers] always reads the cache, and [loadUsers]
- * replaces the cache with the last GoRest page. A failed fetch leaves the cache untouched.
+ * replaces the cache with the last GoRest page, stamping each row with the fetch time. A failed fetch leaves the cache
+ * untouched.
  */
 class OfflineFirstMainRepository(
     private val mainApi: MainApi,
     private val userDao: UserDao,
+    private val clock: Clock = Clock.System,
 ) : MainRepository {
 
     override fun observeUsers(): Flow<List<User>> =
@@ -26,7 +29,10 @@ class OfflineFirstMainRepository(
 
     override suspend fun loadUsers(): EmptyResult<DataError.Network> {
         return mainApi.getLastPageUsers()
-            .map { dtos -> dtos.map { it.toDomain().toEntity() } }
+            .map { dtos ->
+                val syncedAt = clock.now().toEpochMilliseconds()
+                dtos.map { it.toDomain().toEntity(syncedAt) }
+            }
             .onSuccess { entities -> userDao.replaceAll(entities) }
             .asEmptyResult()
     }
