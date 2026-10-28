@@ -7,7 +7,6 @@ kotlin {
         commonMain.dependencies {
             implementation(projects.core.domain)
             api(libs.bundles.ktor.common)
-            implementation(libs.koin.core)
         }
         androidMain.dependencies {
             implementation(libs.ktor.client.okhttp)

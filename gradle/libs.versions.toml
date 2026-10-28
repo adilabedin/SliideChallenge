@@ -31,6 +31,7 @@ kotlinx-datetime = "0.8.0"
 # Third party
 koin = "4.2.2"
 ktor = "3.6.0"
+buildkonfig = "0.17.1"
 
 # Testing
 assertk = "0.28.1"
@@ -44,6 +45,8 @@ compose-gradlePlugin = { module = "org.jetbrains.compose:compose-gradle-plugin",
 compose-compiler-gradlePlugin = { module = "org.jetbrains.kotlin:compose-compiler-gradle-plugin", version.ref = "kotlin" }
 ksp-gradlePlugin = { module = "com.google.devtools.ksp:com.google.devtools.ksp.gradle.plugin", version.ref = "ksp" }
 room-gradlePlugin = { module = "androidx.room:room-gradle-plugin", version.ref = "room" }
+buildkonfig-gradlePlugin = { module = "com.codingfeline.buildkonfig:buildkonfig-gradle-plugin", version.ref = "buildkonfig" }
+buildkonfig-compiler = { module = "com.codingfeline.buildkonfig:buildkonfig-compiler", version.ref = "buildkonfig" }
 
 # Android app
 androidx-activity-compose = { module = "androidx.activity:activity-compose", version.ref = "androidx-activity" }
@@ -109,6 +112,7 @@ compose-multiplatform = { id = "org.jetbrains.compose", version.ref = "compose-m
 compose-compiler = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
 ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
 room = { id = "androidx.room", version.ref = "room" }
+buildkonfig = { id = "com.codingfeline.buildkonfig", version.ref = "buildkonfig" }
 
 # Convention plugins (build-logic)
 convention-android-application-compose = { id = "com.androidlearning.sliide.convention.android.application.compose", version = "unspecified" }
@@ -117,3 +121,4 @@ convention-kmp-library = { id = "com.androidlearning.sliide.convention.kmp.libra
 convention-cmp-library = { id = "com.androidlearning.sliide.convention.cmp.library", version = "unspecified" }
 convention-cmp-feature = { id = "com.androidlearning.sliide.convention.cmp.feature", version = "unspecified" }
 convention-room = { id = "com.androidlearning.sliide.convention.room", version = "unspecified" }
+convention-buildkonfig = { id = "com.androidlearning.sliide.convention.buildkonfig", version = "unspecified" }

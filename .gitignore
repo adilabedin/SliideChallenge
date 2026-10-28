@@ -20,3 +20,5 @@ node_modules/
 .claude/
 CLAUDE.md
 AGENTS.md
+# IDE (VS Code / Cursor Kotlin LSP) compiled output
+build-logic/convention/bin/

@@ -13,6 +13,8 @@ dependencies {
     compileOnly(libs.compose.compiler.gradlePlugin)
     compileOnly(libs.ksp.gradlePlugin)
     compileOnly(libs.room.gradlePlugin)
+    compileOnly(libs.buildkonfig.gradlePlugin)
+    compileOnly(libs.buildkonfig.compiler)
 }
 
 java {
@@ -58,6 +60,10 @@ gradlePlugin {
         register("room") {
             id = libs.plugins.convention.room.get().pluginId
             implementationClass = "RoomConventionPlugin"
+        }
+        register("buildkonfig") {
+            id = libs.plugins.convention.buildkonfig.get().pluginId
+            implementationClass = "BuildKonfigConventionPlugin"
         }
     }
 }

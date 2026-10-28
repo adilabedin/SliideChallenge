@@ -1,0 +1,6 @@
+## Copy to `local.properties` (gitignored) and fill in your values.
+
+sdk.dir=/path/to/Android/sdk
+
+# GoRest API key — https://gorest.co.in/my-account
+API_KEY=your_token_here
