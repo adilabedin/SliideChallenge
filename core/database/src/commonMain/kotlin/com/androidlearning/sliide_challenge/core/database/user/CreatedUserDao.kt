@@ -19,6 +19,10 @@ interface CreatedUserDao {
     @Query("SELECT * FROM ${DatabaseConstants.CREATED_USERS_TABLE} WHERE localId = :localId")
     suspend fun getByLocalId(localId: Long): CreatedUserEntity?
 
+    /** Edits only the user's fields, so a [setRemoteId] landing concurrently is never overwritten. */
+    @Query("UPDATE ${DatabaseConstants.CREATED_USERS_TABLE} SET name = :name, email = :email WHERE localId = :localId")
+    suspend fun updateDetails(localId: Long, name: String, email: String)
+
     @Query("UPDATE ${DatabaseConstants.CREATED_USERS_TABLE} SET remoteId = :remoteId WHERE localId = :localId")
     suspend fun setRemoteId(localId: Long, remoteId: Long)
 

@@ -5,11 +5,12 @@ import assertk.assertThat
 import assertk.assertions.isEqualTo
 import assertk.assertions.isFalse
 import assertk.assertions.isTrue
-import com.androidlearning.sliide_challenge.core.domain.user.MainRepository
-import com.androidlearning.sliide_challenge.core.domain.user.User
 import com.androidlearning.sliide_challenge.core.domain.util.DataError
 import com.androidlearning.sliide_challenge.core.domain.util.EmptyResult
 import com.androidlearning.sliide_challenge.core.domain.util.Result
+import com.androidlearning.sliide_challenge.userfeed.domain.FeedUser
+import com.androidlearning.sliide_challenge.userfeed.domain.FeedUserId
+import com.androidlearning.sliide_challenge.userfeed.domain.UserFeedRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -25,15 +26,21 @@ import kotlin.test.Test
 @OptIn(ExperimentalCoroutinesApi::class)
 class UserFeedViewModelTest {
 
-    private class FakeMainRepository : MainRepository {
-        val users = MutableStateFlow<List<User>>(emptyList())
+    private class FakeUserFeedRepository : UserFeedRepository {
+        val users = MutableStateFlow<List<FeedUser>>(emptyList())
 
-        override fun observeUsers(): Flow<List<User>> = users
+        override fun observeUsers(): Flow<List<FeedUser>> = users
 
-        override suspend fun loadUsers(): EmptyResult<DataError.Network> = Result.Success(Unit)
+        override suspend fun createUser(name: String, email: String): EmptyResult<DataError.Network> =
+            Result.Success(Unit)
+
+        override suspend fun updateUser(id: FeedUserId, name: String, email: String): EmptyResult<DataError.Network> =
+            Result.Success(Unit)
+
+        override suspend fun deleteUser(id: FeedUserId): EmptyResult<DataError.Network> = Result.Success(Unit)
     }
 
-    private val repository = FakeMainRepository()
+    private val repository = FakeUserFeedRepository()
 
     @BeforeTest
     fun setUp() {
@@ -58,8 +65,8 @@ class UserFeedViewModelTest {
 
     @Test
     fun `cached users are shown and updates are reflected`() = runTest {
-        val ada = User(1, "Ada", "ada@x.io")
-        val alan = User(2, "Alan", "alan@x.io")
+        val ada = FeedUser(FeedUserId.Remote(1), "Ada", "ada@x.io")
+        val alan = FeedUser(FeedUserId.Created(1), "Alan", "alan@x.io")
         repository.users.value = listOf(ada)
         val viewModel = UserFeedViewModel(repository)
 

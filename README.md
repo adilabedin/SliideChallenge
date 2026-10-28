@@ -49,8 +49,26 @@ This is a Kotlin Multiplatform project targeting Android, iOS.
 - **Startup:** `MainViewModel` only calls the network when the database is empty. With cached users it skips the
   fetch entirely and opens the feed; if the fetch fails, the feed opens on its empty state. `MainViewModel` exposes
   a single `isLoading: StateFlow<Boolean>` (no state class), set to `false` once startup is done.
-- **Feed:** `UserFeedViewModel` observes `MainRepository.observeUsers()` and shows the cached list (name + email), or an
-  empty-data state when the table is empty.
+- **Feed:** `UserFeedViewModel` observes `UserFeedRepository.observeUsers()` and shows the list (name + email), or an
+  empty-data state when there are no users.
+
+### Creating, editing and deleting users (`:userfeed`)
+
+- **Contracts:** `FeedUser`, `FeedUserId` and `UserFeedRepository` live in `:userfeed:domain`. `UserFeedApi` /
+  `KtorUserFeedApi` (`POST users`, `PATCH users/{id}`, `DELETE users/{id}`) and `OfflineFirstUserFeedRepository` live in
+  `:userfeed:data`, wired by `userFeedDataModule()`. The DAOs stay in `:core:database` (one `SliideDatabase`).
+- **`FeedUserId` is sealed (`Created(localId)` / `Remote(id)`).** Local row ids and GoRest ids are separate sequences
+  and can collide, and the repository needs to know which table a row lives in. The list flattens it to a string key
+  (`created-1`, `remote-1`) because lazy-list keys must be saveable on Android.
+- **Local first, then the network.** Every change is written to Room before its request, so the feed (a `combine` of
+  the created, cached and pending-sync tables) updates immediately. A create is always stored in `CreatedUsersTable`;
+  on 201 its `remoteId` is recorded. If a request fails, the change stays local and is queued in the matching
+  pending-sync table, and the error is returned so the UI can say it hasn't reached the server yet.
+- **Unsynced creates never hit the network again.** Editing one updates its row (the pending create carries the
+  edit); deleting one removes the row and its pending create. Once a created user has a `remoteId`, edits and deletes
+  go to the server like any other user.
+- **Queued edits never go stale.** A successful PATCH drops any older queued edit for that user, and deleting a user
+  drops its queued edit whether or not the DELETE succeeds.
 
 ### Local database (`:core:database`)
 
@@ -69,7 +87,8 @@ This is a Kotlin Multiplatform project targeting Android, iOS.
   depends on every core module, so per-layer core modules would add files without adding isolation. Two bindings could
   only live in the app anyway: the `HttpClient` needs `BuildKonfig.API_KEY`, and the Android database builder needs the
   app `Context`.
-- **Features own their module.** `userFeedPresentationModule()` lives in `:userfeed:presentation`, so a feature can be
+- **Features own their module.** `userFeedDataModule()` and `userFeedPresentationModule()` live in `:userfeed:data` and
+  `:userfeed:presentation`, so a feature can be
   added or removed without the app knowing its internals. `initKoin` only lists modules.
 - Core data and database modules stay free of Koin.
 
@@ -99,6 +118,12 @@ This is a Kotlin Multiplatform project targeting Android, iOS.
   and a pending delete is just the server id. A row is removed only after its request succeeds. Editing or deleting a
   user that hasn't been POSTed yet changes or removes the created row in place, so nothing is queued for it. Pending
   updates/deletes are exposed as `Flow`s so the feed can overlay them on server rows a refresh would otherwise restore.
+- **Creates send placeholder `gender` and `status`.** GoRest rejects a create without them (422), but the brief's form
+  only has name and email, so `KtorUserFeedApi` sends `gender = "female"`, `status = "active"`. They are passed
+  explicitly rather than as DTO defaults, because the JSON encoder omits properties left at their default value.
+- **Every failed request is queued for now, including 4xx.** The pending-sync tables don't distinguish failures yet.
+  Retrying a 422 (e.g. "email has already been taken") can never succeed, so when the sync logic is written it should
+  only retry transient errors (no internet, timeouts, 5xx, 429) and treat a 404 on DELETE as done.
 - **Schema stays at version 1 during development.** The app isn't released, so schema changes edit version 1 in
   place and require reinstalling the app instead of carrying migrations.
 - **Startup fetches only when the cache is empty.** This keeps launch instant and offline-friendly, at the cost of

@@ -20,6 +20,8 @@ fun appModule(): Module =
         single { HttpClientFactory.create(apiKey = BuildKonfig.API_KEY) }
         single { DatabaseFactory.create(databaseBuilder()) }
         single { get<SliideDatabase>().userDao() }
+        single { get<SliideDatabase>().createdUserDao() }
+        single { get<SliideDatabase>().userPendingSyncDao() }
 
         singleOf(::KtorMainApi) bind MainApi::class
         singleOf(::OfflineFirstMainRepository) bind MainRepository::class

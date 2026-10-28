@@ -7,6 +7,7 @@ kotlin {
         commonMain.dependencies {
             implementation(projects.core.domain)
             implementation(projects.core.data)
+            implementation(projects.core.database)
             implementation(projects.userfeed.domain)
             implementation(projects.userfeed.database)
             implementation(libs.koin.core)

@@ -2,18 +2,18 @@ package com.androidlearning.sliide_challenge.userfeed.presentation.feed
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.androidlearning.sliide_challenge.core.domain.user.MainRepository
+import com.androidlearning.sliide_challenge.userfeed.domain.UserFeedRepository
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 
-/** Renders whatever is cached; [MainRepository] keeps the cache in sync with the last GoRest page. */
+/** Renders the database's view of the feed, so every create, update and delete shows up as soon as it is written. */
 class UserFeedViewModel(
-    mainRepository: MainRepository,
+    userFeedRepository: UserFeedRepository,
 ) : ViewModel() {
 
-    val state: StateFlow<UserFeedState> = mainRepository.observeUsers()
+    val state: StateFlow<UserFeedState> = userFeedRepository.observeUsers()
         .map { users -> UserFeedState(isLoading = false, users = users) }
         .stateIn(
             scope = viewModelScope,

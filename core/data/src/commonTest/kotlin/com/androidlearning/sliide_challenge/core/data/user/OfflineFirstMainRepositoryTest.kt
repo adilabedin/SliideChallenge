@@ -30,6 +30,14 @@ class OfflineFirstMainRepositoryTest {
             rows.value += users.associateBy { it.id }
         }
 
+        override suspend fun update(user: UserEntity) {
+            if (user.id in rows.value) rows.value += user.id to user
+        }
+
+        override suspend fun deleteById(id: Long) {
+            rows.value -= id
+        }
+
         override suspend fun deleteAll() {
             rows.value = emptyMap()
         }

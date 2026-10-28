@@ -29,7 +29,8 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.androidlearning.sliide_challenge.core.designsystem.theme.SliideTheme
-import com.androidlearning.sliide_challenge.core.domain.user.User
+import com.androidlearning.sliide_challenge.userfeed.domain.FeedUser
+import com.androidlearning.sliide_challenge.userfeed.domain.FeedUserId
 import org.koin.compose.viewmodel.koinViewModel
 
 @Composable
@@ -61,11 +62,11 @@ fun UserFeedScreen(
 
 @Composable
 private fun UserList(
-    users: List<User>,
+    users: List<FeedUser>,
     modifier: Modifier = Modifier,
 ) {
     LazyColumn(modifier = modifier) {
-        items(items = users, key = User::id) { user ->
+        items(items = users, key = { it.id.listKey() }) { user ->
             ListItem(
                 headlineContent = { Text(user.name) },
                 supportingContent = { Text(user.email) },
@@ -74,6 +75,13 @@ private fun UserList(
         }
     }
 }
+
+/** Lazy-list keys must be saveable on Android, so the sealed id is flattened to a string unique across both kinds. */
+private fun FeedUserId.listKey(): String =
+    when (this) {
+        is FeedUserId.Created -> "created-$localId"
+        is FeedUserId.Remote -> "remote-$id"
+    }
 
 @Composable
 private fun EmptyUsersContent(
@@ -113,8 +121,9 @@ private fun UserFeedScreenPreview() {
             state = UserFeedState(
                 isLoading = false,
                 users = listOf(
-                    User(2, "Alan Turing", "alan@example.com"),
-                    User(1, "Ada Lovelace", "ada@example.com"),
+                    FeedUser(FeedUserId.Created(1), "Grace Hopper", "grace@example.com"),
+                    FeedUser(FeedUserId.Remote(2), "Alan Turing", "alan@example.com"),
+                    FeedUser(FeedUserId.Remote(1), "Ada Lovelace", "ada@example.com"),
                 ),
             ),
         )

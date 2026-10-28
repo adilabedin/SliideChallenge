@@ -67,6 +67,19 @@ class CreatedUserDaoTest {
     }
 
     @Test
+    fun updateDetails_changesNameAndEmailButKeepsRemoteId() = runTest {
+        val localId = dao.upsert(createdUser())
+        dao.setRemoteId(localId, remoteId = 42)
+
+        dao.updateDetails(localId, name = "New", email = "new@example.com")
+
+        val user = dao.getByLocalId(localId)!!
+        assertThat(user.name).isEqualTo("New")
+        assertThat(user.email).isEqualTo("new@example.com")
+        assertThat(user.remoteId).isEqualTo(42L)
+    }
+
+    @Test
     fun deleteByLocalId_removesOnlyThatUser() = runTest {
         val keptId = dao.upsert(createdUser(name = "Kept", createdAt = 1_000))
         val removedId = dao.upsert(createdUser(name = "Removed", createdAt = 2_000))

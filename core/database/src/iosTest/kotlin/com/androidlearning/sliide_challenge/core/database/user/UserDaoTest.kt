@@ -61,6 +61,31 @@ class UserDaoTest {
         assertThat(dao.getAll().first()).containsExactly(user(id = 3))
     }
 
+    @Test
+    fun update_existingId_replacesOnlyThatRow() = runTest {
+        dao.insertAll(listOf(user(id = 1), user(id = 2)))
+
+        dao.update(user(id = 1, name = "Edited"))
+
+        assertThat(dao.getAll().first()).containsExactly(user(id = 2), user(id = 1, name = "Edited"))
+    }
+
+    @Test
+    fun update_missingId_doesNotInsert() = runTest {
+        dao.update(user(id = 1))
+
+        assertThat(dao.getAll().first()).isEmpty()
+    }
+
+    @Test
+    fun deleteById_removesOnlyThatRow() = runTest {
+        dao.insertAll(listOf(user(id = 1), user(id = 2)))
+
+        dao.deleteById(1)
+
+        assertThat(dao.getAll().first()).containsExactly(user(id = 2))
+    }
+
     private fun user(id: Long, name: String = "User $id") = UserEntity(
         id = id,
         name = name,
