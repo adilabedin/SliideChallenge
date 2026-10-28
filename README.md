@@ -27,6 +27,23 @@ This is a Kotlin Multiplatform project targeting Android, iOS.
   OkHttp throws `UnknownHostException`/`ConnectException`, while Darwin throws `DarwinHttpRequestException` carrying an
   `NSURLError` code. Everything else in the networking stack is common code.
 
+### Loading users (launch screen → feed)
+
+- **Flow:** `App()` → `MainViewModel` → `MainRepository` → `MainApi` → Ktor `HttpClient`. There is no splash
+  *route*: `App()` shows `SplashContent` until `MainState.isReady`, then crossfades to `NavigationRoot` (feed).
+- **Android** keeps the system splash (`core-splashscreen`) up via `setKeepOnScreenCondition { isLoading }`;
+  `MainActivity` passes its `MainViewModel` into `App()` so both observe the same state.
+- **iOS** launch screens are static and can't be held, so `UILaunchScreen` (`LaunchBackground` + `LaunchLogo`, 160pt)
+  is followed by `SplashContent`, which draws the same colour and logo at the same size — users see one continuous
+  splash. On failure, an error and Retry button appear under the logo.
+- **Contracts:** `User` and `MainRepository` live in `:core:domain`; `UserDto` (`@Serializable`), the `toDomain()`
+  mapper, `MainApi`, `KtorMainApi` and `KtorMainRepository` live in `:core:data`, so serialization types never leak
+  into domain or presentation.
+- **Last page:** GoRest has no "last page" shortcut and returns 404 for `HEAD`, so `KtorMainApi` GETs page 1, reads the
+  `X-Pagination-Pages` header, then GETs that page.
+- **Cache:** `KtorMainRepository` currently keeps users in an in-memory `StateFlow` (`observeUsers()`); Room will
+  replace it as the offline source of truth.
+
 ### Running the apps
 
 Use the run configurations provided by the run widget in your IDE's toolbar. You can also use these commands and options:

@@ -15,6 +15,7 @@ compose-multiplatform = "1.12.1"
 
 # AndroidX / JetBrains AndroidX
 androidx-activity = "1.13.0"
+androidx-core-splashscreen = "1.2.0"
 androidx-lifecycle = "2.11.0"
 material3 = "1.12.0-alpha03"
 material3-adaptive = "1.3.0"
@@ -50,6 +51,7 @@ buildkonfig-compiler = { module = "com.codingfeline.buildkonfig:buildkonfig-comp
 
 # Android app
 androidx-activity-compose = { module = "androidx.activity:activity-compose", version.ref = "androidx-activity" }
+androidx-core-splashscreen = { module = "androidx.core:core-splashscreen", version.ref = "androidx-core-splashscreen" }
 
 # Compose Multiplatform
 compose-runtime = { module = "org.jetbrains.compose.runtime:runtime", version.ref = "compose-multiplatform" }
