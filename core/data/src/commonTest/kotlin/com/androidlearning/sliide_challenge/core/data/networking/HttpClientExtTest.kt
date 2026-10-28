@@ -10,6 +10,7 @@ import io.ktor.client.engine.mock.MockEngine
 import io.ktor.client.engine.mock.MockRequestHandleScope
 import io.ktor.client.engine.mock.respond
 import io.ktor.client.engine.mock.toByteArray
+import io.ktor.client.plugins.HttpRequestTimeoutException
 import io.ktor.client.request.HttpRequestData
 import io.ktor.client.request.HttpResponseData
 import io.ktor.http.HttpHeaders
@@ -123,6 +124,15 @@ class HttpClientExtTest {
         val result = client.get<JsonObject>(route = "users")
 
         assertThat(result).isEqualTo(Result.Error(DataError.Network.UNKNOWN))
+    }
+
+    @Test
+    fun `request timeout maps to timeout error instead of cancelling caller`() = runTest {
+        val client = client { request -> throw HttpRequestTimeoutException(request.url.toString(), 20_000) }
+
+        val result = client.get<JsonObject>(route = "users")
+
+        assertThat(result).isEqualTo(Result.Error(DataError.Network.REQUEST_TIMEOUT))
     }
 
     @Test
