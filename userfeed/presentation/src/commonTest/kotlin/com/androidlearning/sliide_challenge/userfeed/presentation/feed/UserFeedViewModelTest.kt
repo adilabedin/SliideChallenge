@@ -5,17 +5,11 @@ import assertk.assertThat
 import assertk.assertions.isEqualTo
 import assertk.assertions.isFalse
 import assertk.assertions.isTrue
-import com.androidlearning.sliide_challenge.core.domain.util.DataError
-import com.androidlearning.sliide_challenge.core.domain.util.EmptyResult
-import com.androidlearning.sliide_challenge.core.domain.util.Result
 import com.androidlearning.sliide_challenge.userfeed.domain.FeedUser
 import com.androidlearning.sliide_challenge.userfeed.domain.FeedUserId
-import com.androidlearning.sliide_challenge.userfeed.domain.RejectedCreation
-import com.androidlearning.sliide_challenge.userfeed.domain.UserFeedRepository
+import com.androidlearning.sliide_challenge.userfeed.presentation.FakeUserFeedRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.resetMain
@@ -30,28 +24,6 @@ import kotlin.time.Instant
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class UserFeedViewModelTest {
-
-    private class FakeUserFeedRepository : UserFeedRepository {
-        val users = MutableStateFlow<List<FeedUser>>(emptyList())
-
-        override fun observeUsers(): Flow<List<FeedUser>> = users
-
-        override suspend fun createUser(name: String, email: String): EmptyResult<DataError.Network> =
-            Result.Success(Unit)
-
-        override suspend fun updateUser(id: FeedUserId, name: String, email: String): EmptyResult<DataError.Network> =
-            Result.Success(Unit)
-
-        override suspend fun deleteUser(id: FeedUserId): EmptyResult<DataError.Network> = Result.Success(Unit)
-
-        override fun observeHasPendingSyncs(): Flow<Boolean> = MutableStateFlow(false)
-
-        override suspend fun syncPendingChanges(): EmptyResult<DataError.Network> = Result.Success(Unit)
-
-        override fun observeRejectedCreations(): Flow<List<RejectedCreation>> = MutableStateFlow(emptyList())
-
-        override suspend fun dismissRejectedCreation(id: Long) = Unit
-    }
 
     private class FakeClock : Clock {
         var now = Instant.fromEpochMilliseconds(1_000_000)

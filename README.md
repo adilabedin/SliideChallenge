@@ -75,6 +75,37 @@ This is a Kotlin Multiplatform project targeting Android, iOS.
 - **Queued edits never go stale.** A successful PATCH drops any older queued edit for that user, and deleting a user
   drops its queued edit whether or not the DELETE succeeds.
 
+### Add / edit user form (`UserFormScreen`)
+
+- **One screen, two modes.** The feed's extended FAB ("Add user", shrinking to an icon once the list scrolls)
+  navigates to `UserFormRoute()`. `UserFormRoute(createdLocalId, remoteId)` maps to `UserFormMode.Create` or
+  `UserFormMode.Edit(FeedUserId)`, which reaches `UserFormViewModel` through Koin's `parametersOf`. In edit mode the
+  ViewModel prefills from the feed (`observeUsers().first()`), saves with `updateUser`, and closes if the user no longer
+  exists. The ViewModel and its tests support editing; the feed doesn't have an entry point for it yet.
+- **Validation lives in `:userfeed:domain` (`UserValidator`) as typed `Result`s** (`NameValidationError`,
+  `EmailValidationError`), so it is pure, shared, and unit-tested on both JVM and iOS. Input is normalised first
+  (trimmed, with name whitespace collapsed), and the normalised value is both what's validated and what's saved.
+  - *Name:* 2 to 100 characters. It must start with a letter in any script (`\p{L}`), followed by letters, combining
+    marks, spaces, apostrophes (`'` or `’`), hyphens and full stops. "José Núñez", "O'Brien", "Jean-Luc" and "李小龍"
+    pass; digits, symbols and emoji don't.
+  - *Email:* a practical subset of RFC 5322, with no quoted local parts or IP-literal domains. The local part is
+    dot-separated runs of RFC "atext" characters (no leading, trailing or double dots, at most 64 characters). The
+    domain has two or more labels of letters, digits and inner hyphens (at most 63 characters each), ending in an
+    alphabetic TLD of 2+ letters. The whole address is at most 254 characters.
+- **Real-time, but not hostile.** Both fields are re-validated on every keystroke. The submit button is enabled only
+  while both are valid, and a check mark appears in each field as soon as it is valid. An error stays hidden until the
+  user has typed in a field and left it, so a fresh form doesn't open covered in red. After that the error follows
+  every keystroke.
+- **The form waits for GoRest, then closes.** The row is in Room before the POST, so when the 201 arrives and the form
+  pops, the new user is already at the top of the feed. The feed scrolls to the top when a created user appears, because
+  a keyed lazy list would otherwise keep the old first row in view. Any failure other than 422 has already been queued
+  for sync, so the form closes the same way and the row reads "Not synced".
+- **A save can't be cut in half.** The repository writes locally, POSTs, then queues the change on failure. Cancelling
+  between those steps would leave a local user that never syncs. So the ViewModel runs the save in
+  `withContext(NonCancellable)`, and the close button is disabled while it runs.
+- **The form keeps its fields across process death** by storing name and email in `SavedStateHandle`. A restored
+  edit form keeps the user's typing instead of re-prefilling.
+
 ### Background sync (WorkManager on Android, BGTaskScheduler on iOS)
 
 - **Every 30 minutes, only while online and only while something is pending.** `PendingSyncScheduling` (shared code)
@@ -168,8 +199,9 @@ This is a Kotlin Multiplatform project targeting Android, iOS.
     So the created user is removed and recorded in `RejectedCreationsTable`, whether the 422 comes back on the first
     POST or in a later sync. The UI reads `observeRejectedCreations()` to show a snackbar and then calls
     `dismissRejectedCreation()`. The record is persisted because the rejection can arrive from a background sync
-    while the app is closed. A foreground create that gets a 422 also returns the error, but the snackbar should come
-    only from the rejections flow so it isn't shown twice.
+    while the app is closed. When the 422 comes back to the add-user form, the form shows "This email is already
+    taken" inline and stays open, so the user can fix it in place. It then dismisses the rejection record it just
+    caused, so the feed won't report it a second time.
   - A 422 on a queued edit is still retried every 30 minutes until the user edits or deletes that user again.
 - **iOS sync timing is best-effort.** iOS can't guarantee a 30-minute cadence, which is why the app also syncs
   whenever it becomes active.
