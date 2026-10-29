@@ -42,13 +42,15 @@ import org.koin.compose.viewmodel.koinViewModel
 import org.koin.core.parameter.parametersOf
 
 /**
- * [onDeleteConfirmed] must hand the id to the feed and return to it: the feed holds the delete back so it can offer
- * Undo (see [UserDetailEvent.DeleteConfirmed]).
+ * [onDeleteConfirmed] must hand the id to the feed and close these details: the feed holds the delete back so it can
+ * offer Undo (see [UserDetailEvent.DeleteConfirmed]). [showBackButton] is false when the details sit beside the list,
+ * where there is nothing to go back to.
  */
 @Composable
 fun UserDetailRoot(
     userId: FeedUserId,
-    onNavigateBack: () -> Unit,
+    showBackButton: Boolean,
+    onClose: () -> Unit,
     onDeleteConfirmed: (FeedUserId) -> Unit,
     viewModel: UserDetailViewModel = koinViewModel { parametersOf(userId) },
 ) {
@@ -57,14 +59,14 @@ fun UserDetailRoot(
     ObserveAsEvents(viewModel.events) { event ->
         when (event) {
             is UserDetailEvent.DeleteConfirmed -> onDeleteConfirmed(event.id)
-            UserDetailEvent.UserNotFound -> onNavigateBack()
+            UserDetailEvent.UserNotFound -> onClose()
         }
     }
 
     UserDetailScreen(
         state = state,
         onAction = viewModel::onAction,
-        onBackClick = onNavigateBack,
+        onBackClick = onClose.takeIf { showBackButton },
     )
 }
 
@@ -72,7 +74,7 @@ fun UserDetailRoot(
 fun UserDetailScreen(
     state: UserDetailState,
     onAction: (UserDetailAction) -> Unit,
-    onBackClick: () -> Unit,
+    onBackClick: (() -> Unit)?,
 ) {
     // System back drops the unsaved edit before it leaves the screen.
     NavigationBackHandler(
@@ -116,8 +118,7 @@ fun UserDetailScreen(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                // The avatar follows the name being typed, so it previews the edit.
-                UserAvatar(name = if (state.isEditing) state.name else state.user?.name.orEmpty())
+                UserAvatar()
                 Spacer(modifier = Modifier.height(8.dp))
                 AnimatedContent(
                     targetState = state.isEditing,

@@ -29,7 +29,7 @@ import com.androidlearning.sliide_challenge.core.designsystem.theme.SliideTheme
 /**
  * The app bar of a screen that shows a user and edits them in place. Viewing shows a back arrow and an edit button.
  * Editing tints the bar, like the feed's modes, swaps the back arrow for a close button that drops the edit, and the
- * edit button for Save.
+ * edit button for Save. Without [onBackClick] there is no back arrow, e.g. beside the list on a wide screen.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -38,7 +38,7 @@ fun UserTopBar(
     isSaving: Boolean,
     canEdit: Boolean,
     canSave: Boolean,
-    onBackClick: () -> Unit,
+    onBackClick: (() -> Unit)?,
     onEditClick: () -> Unit,
     onSaveClick: () -> Unit,
     onCancelEditClick: () -> Unit,
@@ -56,7 +56,7 @@ fun UserTopBar(
                 IconButton(onClick = onCancelEditClick, enabled = !isSaving) {
                     Icon(Icons.Default.Close, contentDescription = "Cancel editing")
                 }
-            } else {
+            } else if (onBackClick != null) {
                 IconButton(onClick = onBackClick) {
                     Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                 }

@@ -3,11 +3,17 @@ package com.androidlearning.sliide_challenge.userfeed.presentation.feed
 import com.androidlearning.sliide_challenge.userfeed.domain.FeedUserId
 
 sealed interface UserFeedAction {
-    /** Edits [user] in [FeedMode.Edit] and ticks or unticks it in [FeedMode.Delete]. */
+    /** Opens [user]'s details while browsing, edits them in [FeedMode.Edit] and ticks them in [FeedMode.Delete]. */
     data class OnUserClick(val user: FeedUserUi) : UserFeedAction
 
     /** Asks for confirmation before deleting [user]; only while browsing. */
     data class OnUserLongClick(val user: FeedUserUi) : UserFeedAction
+
+    /** Closes the opened user's details, e.g. their back arrow, or a user who no longer exists. */
+    data object OnCloseUserClick : UserFeedAction
+
+    /** The window changed between showing the details over the list and beside it. */
+    data class OnLayoutChange(val showsDetailsBesideList: Boolean) : UserFeedAction
 
     data object OnEditModeClick : UserFeedAction
 
@@ -26,7 +32,7 @@ sealed interface UserFeedAction {
     data object OnUndoDeleteClick : UserFeedAction
 
     /**
-     * A delete already confirmed on another screen, e.g. the user's detail screen. It is held back for Undo exactly
+     * A delete already confirmed elsewhere, e.g. the user's details. It is held back for Undo exactly
      * like one confirmed here, so the feed can offer Undo once the user is back on it.
      */
     data class OnDeleteRequested(val id: FeedUserId) : UserFeedAction

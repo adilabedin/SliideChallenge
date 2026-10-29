@@ -103,7 +103,7 @@ fun UserFormScreen(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                UserAvatar(name = state.name)
+                UserAvatar()
                 Spacer(modifier = Modifier.height(8.dp))
                 UserFields(
                     name = state.name,

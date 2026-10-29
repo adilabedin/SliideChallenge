@@ -106,6 +106,34 @@ This is a Kotlin Multiplatform project targeting Android, iOS.
 - **The form keeps its fields across process death** by storing name and email in `SavedStateHandle`. A restored
   edit form keeps the user's typing instead of re-prefilling.
 
+### Adaptive layout (phones, tablets, desktop)
+
+- **The feed and a user's details form one list-detail layout.** `SliideAdaptiveListDetailLayout` (in
+  `:core:designsystem`, `components/layouts`) takes a list, a detail and a placeholder, and arranges them by
+  `DeviceConfiguration` (in `:core:presentation`, built from the Material 3 adaptive window size class):
+  - **Phone held upright:** one pane at a time. Tapping a user slides their details in over the list, and back (or the
+    back arrow) slides the list back with its scroll position kept.
+  - **Phone on its side, tablets (either way round), desktop:** the list on the start side (40% of the width, clamped
+    to 280–400 dp) and the details beside it. The first user is shown until another is picked, and stays the
+    fallback, so deleting the shown user moves the details to the next first user. Only an empty list leaves the
+    detail pane with a placeholder. A phone held upright never opens a user on its own, since that would hide the
+    list. The opened row is highlighted, and the details have no back arrow, since there is nothing to go back
+    to.
+- **One destination, so turning the device keeps your place.** The opened user lives in `UserFeedState.openedUserId`,
+  not in a navigation route. Each user's `UserDetailViewModel` is keyed by user inside the feed's back-stack entry, so
+  rotating between one and two panes, even mid-edit, shows the same details with the edit intact. Trade-off: every
+  user opened in a session keeps its ViewModel, and that ViewModel's watch for the user disappearing, until the feed
+  itself closes. With one page of users that cost is small. The previous design used a detail route, which freed the
+  ViewModel on back but lost the edit on rotation.
+- **`DeviceConfiguration` checks width before height.** A window narrower than 600 dp is a phone held upright, however
+  tall. A wider window shorter than 480 dp is a phone on its side. Only then do width and height separate tablets from
+  desktops. This way a small phone in landscape or an unfolded foldable is never treated as a desktop. Unit tests pin
+  each case.
+- **Each pane pads only for its own edges.** Both panes are full `Scaffold`s, so the layout consumes the inner-edge
+  insets. That stops a phone's side navigation bar from padding the middle of the screen.
+- **Not adaptive on purpose:** the add/edit form keeps one structure everywhere and only caps its width at 560 dp. The
+  skill rules keep structural layouts for structural differences.
+
 ### Background sync (WorkManager on Android, BGTaskScheduler on iOS)
 
 - **Every 30 minutes, only while online and only while something is pending.** `PendingSyncScheduling` (shared code)
@@ -213,17 +241,17 @@ This is a Kotlin Multiplatform project targeting Android, iOS.
   refresh all share the same time.
 - **Startup fetches only when the cache is empty.** This keeps launch instant and offline-friendly, at the cost of
   showing a cached page until the user refreshes.
-- **Tapping a user opens their detail screen; long-pressing opens a delete confirmation bottom sheet.** A bottom sheet
+- **Tapping a user opens their details; long-pressing opens a delete confirmation bottom sheet.** A bottom sheet
   rather than a dialog keeps the destructive choice within thumb reach, and the long press gives haptic feedback. The
   detail screen ("User") shows the saved details and edits them in place: the app bar's edit button turns the details
   into prefilled, validated fields, the title into "Edit User" and the button into Save. Back (or the close button)
   drops an unsaved edit before it leaves the screen, and Save stays disabled until something actually changed, so an
   untouched save never queues a pointless sync. The feed's own Edit mode still opens the full-screen form.
-- **Delete from the detail screen goes back to the feed for Undo.** The detail screen's Delete button opens the same
+- **Delete from the details returns to the feed for Undo.** The detail screen's Delete button opens the same
   bottom sheet as the long press (it lives in `presentation/composables`, along with the avatar and validated fields,
   so any screen in the feature can use them). Confirming does not delete there: the Undo window belongs to
-  `UserFeedViewModel`, so the confirmed id is handed to it (`OnDeleteRequested`) and the app returns to the feed, where
-  the row is hidden and the Undo snackbar appears. One Undo path means one set of rules for when a delete is
+  `UserFeedViewModel`, so the confirmed id is handed to it (`OnDeleteRequested`). It closes the details and hides the
+  row, and the Undo snackbar appears. Undo brings the row back without reopening the details. One Undo path means one set of rules for when a delete is
   actually sent.
 - **Undo works by not sending the delete yet, rather than by reversing it.** A delete that has reached GoRest (204)
   can't be undone: re-creating the user would give it a new id, and could even be refused (422). So "restore the local

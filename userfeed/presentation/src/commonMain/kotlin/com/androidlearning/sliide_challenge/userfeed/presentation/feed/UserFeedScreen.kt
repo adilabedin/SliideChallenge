@@ -43,6 +43,7 @@ import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
@@ -67,21 +68,32 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.androidlearning.sliide_challenge.core.designsystem.components.layouts.SliideAdaptiveListDetailLayout
+import com.androidlearning.sliide_challenge.core.designsystem.components.layouts.showsListDetailOnePaneAtATime
 import com.androidlearning.sliide_challenge.core.designsystem.theme.SliideTheme
 import com.androidlearning.sliide_challenge.core.presentation.util.ObserveAsEvents
+import com.androidlearning.sliide_challenge.core.presentation.util.currentDeviceConfiguration
 import com.androidlearning.sliide_challenge.userfeed.domain.FeedUserId
 import com.androidlearning.sliide_challenge.userfeed.presentation.composables.DeleteUserSheet
 import com.androidlearning.sliide_challenge.userfeed.presentation.composables.DeleteUsersSheet
+import com.androidlearning.sliide_challenge.userfeed.presentation.detail.UserDetailRoot
 import org.koin.compose.viewmodel.koinViewModel
+import org.koin.core.parameter.parametersOf
 
+/**
+ * The feed and the opened user's details. A phone held upright shows one at a time; wider windows show both side by
+ * side (see [SliideAdaptiveListDetailLayout]). Both arrangements are one destination, so turning the device mid-edit
+ * keeps the edit: each user's details ViewModel lives in this destination, keyed by the user.
+ */
 @Composable
 fun UserFeedRoot(
     onAddUserClick: () -> Unit,
-    onOpenUser: (FeedUserId) -> Unit,
     onEditUser: (FeedUserId) -> Unit,
     viewModel: UserFeedViewModel = koinViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val configuration = currentDeviceConfiguration()
+    val isOnePaneAtATime = configuration.showsListDetailOnePaneAtATime
 
     ObserveAsEvents(viewModel.events) { event ->
         when (event) {
@@ -89,11 +101,39 @@ fun UserFeedRoot(
         }
     }
 
-    UserFeedScreen(
-        state = state,
-        onAction = viewModel::onAction,
-        onAddUserClick = onAddUserClick,
-        onOpenUser = onOpenUser,
+    // Beside the list the ViewModel shows the first user until another is picked; over it, only a tap opens one.
+    LaunchedEffect(isOnePaneAtATime) {
+        viewModel.onAction(UserFeedAction.OnLayoutChange(showsDetailsBesideList = !isOnePaneAtATime))
+    }
+
+    // On a phone the details cover the list, so system back returns to it.
+    NavigationBackHandler(
+        state = rememberNavigationEventState(NavigationEventInfo.None),
+        isBackEnabled = isOnePaneAtATime && state.openedUserId != null,
+        onBackCompleted = { viewModel.onAction(UserFeedAction.OnCloseUserClick) },
+    )
+
+    SliideAdaptiveListDetailLayout(
+        selectedItem = state.openedUserId,
+        configuration = configuration,
+        list = {
+            UserFeedScreen(
+                state = state,
+                onAction = viewModel::onAction,
+                onAddUserClick = onAddUserClick,
+            )
+        },
+        detail = { userId ->
+            UserDetailRoot(
+                userId = userId,
+                showBackButton = isOnePaneAtATime,
+                onClose = { viewModel.onAction(UserFeedAction.OnCloseUserClick) },
+                // The feed holds the delete back for Undo; the details close with it, so the snackbar is in view.
+                onDeleteConfirmed = { viewModel.onAction(UserFeedAction.OnDeleteRequested(it)) },
+                viewModel = koinViewModel(key = "user-detail-${userId.listKey()}") { parametersOf(userId) },
+            )
+        },
+        emptyDetail = { NoUserOpenedContent() },
     )
 }
 
@@ -103,7 +143,6 @@ fun UserFeedScreen(
     state: UserFeedState,
     onAction: (UserFeedAction) -> Unit,
     onAddUserClick: () -> Unit,
-    onOpenUser: (FeedUserId) -> Unit,
 ) {
     val listState = rememberLazyListState()
     val snackbarHostState = remember { SnackbarHostState() }
@@ -157,11 +196,9 @@ fun UserFeedScreen(
                 users = state.users,
                 mode = state.mode,
                 selectedIds = state.selectedIds,
+                openedUserId = state.openedUserId,
                 listState = listState,
-                // Opening a user is plain navigation; in Edit or Delete mode the ViewModel decides what a tap does.
-                onUserClick = { user ->
-                    if (state.mode == FeedMode.Browse) onOpenUser(user.id) else onAction(UserFeedAction.OnUserClick(user))
-                },
+                onUserClick = { onAction(UserFeedAction.OnUserClick(it)) },
                 onUserLongClick = { onAction(UserFeedAction.OnUserLongClick(it)) },
                 modifier = modifier,
             )
@@ -292,6 +329,7 @@ private fun UserList(
     users: List<FeedUserUi>,
     mode: FeedMode,
     selectedIds: Set<FeedUserId>,
+    openedUserId: FeedUserId?,
     listState: LazyListState,
     onUserClick: (FeedUserUi) -> Unit,
     onUserLongClick: (FeedUserUi) -> Unit,
@@ -310,6 +348,8 @@ private fun UserList(
                     user = user,
                     mode = mode,
                     isSelected = user.id in selectedIds,
+                    // Beside the details on a wide screen, the row shows whose details they are.
+                    isOpened = mode == FeedMode.Browse && user.id == openedUserId,
                     onClick = { onUserClick(user) },
                     onLongClick = { onUserLongClick(user) },
                 )
@@ -345,12 +385,13 @@ private fun UserRow(
     user: FeedUserUi,
     mode: FeedMode,
     isSelected: Boolean,
+    isOpened: Boolean,
     onClick: () -> Unit,
     onLongClick: () -> Unit,
 ) {
     val haptics = LocalHapticFeedback.current
     val containerColor by animateColorAsState(
-        if (isSelected) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surface,
+        if (isSelected || isOpened) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surface,
     )
     ListItem(
         modifier = Modifier.combinedClickable(
@@ -401,7 +442,7 @@ private fun UserRow(
 }
 
 /** Lazy-list keys must be saveable on Android, so the sealed id is flattened to a string unique across both kinds. */
-private fun FeedUserId.listKey(): String =
+internal fun FeedUserId.listKey(): String =
     when (this) {
         is FeedUserId.Created -> "created-$localId"
         is FeedUserId.Remote -> "remote-$id"
@@ -437,6 +478,39 @@ private fun EmptyUsersContent(
     }
 }
 
+/** Stands in for the details beside the list while there are no users to show. */
+@Composable
+private fun NoUserOpenedContent() {
+    Surface(modifier = Modifier.fillMaxSize()) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(24.dp),
+            verticalArrangement = Arrangement.Center,
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Icon(
+                imageVector = Icons.Default.Person,
+                contentDescription = null,
+                modifier = Modifier.size(64.dp),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+            Text(
+                text = "No user to show",
+                style = MaterialTheme.typography.titleMedium,
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = "Add a user and their details will appear here.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center,
+            )
+        }
+    }
+}
+
 @Preview
 @Composable
 private fun UserFeedScreenPreview() {
@@ -452,7 +526,6 @@ private fun UserFeedScreenPreview() {
             ),
             onAction = {},
             onAddUserClick = {},
-            onOpenUser = {},
         )
     }
 }
@@ -473,7 +546,6 @@ private fun UserFeedScreenDeleteModePreview() {
             ),
             onAction = {},
             onAddUserClick = {},
-            onOpenUser = {},
         )
     }
 }
@@ -482,6 +554,6 @@ private fun UserFeedScreenDeleteModePreview() {
 @Composable
 private fun UserFeedScreenEmptyPreview() {
     SliideTheme {
-        UserFeedScreen(state = UserFeedState(isLoading = false), onAction = {}, onAddUserClick = {}, onOpenUser = {})
+        UserFeedScreen(state = UserFeedState(isLoading = false), onAction = {}, onAddUserClick = {})
     }
 }

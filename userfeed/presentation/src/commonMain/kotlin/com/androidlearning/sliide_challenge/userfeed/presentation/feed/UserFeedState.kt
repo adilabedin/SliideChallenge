@@ -10,6 +10,13 @@ data class UserFeedState(
     val mode: FeedMode = FeedMode.Browse,
     /** Users ticked in [FeedMode.Delete]; always a subset of [users]. */
     val selectedIds: Set<FeedUserId> = emptySet(),
+    /**
+     * The user whose details are shown, beside the list or over it on a phone; always one of [users]. Beside the list
+     * the first user is shown until another is picked, so the detail pane is never empty while there are users.
+     */
+    val openedUserId: FeedUserId? = null,
+    /** Whether the details sit beside the list (a wide window) rather than over it. */
+    val showsDetailsBesideList: Boolean = false,
     /** Users whose delete is waiting for confirmation in the bottom sheet. */
     val usersToDelete: List<FeedUserUi> = emptyList(),
     /** Deleted users, already hidden from [users], whose delete can still be undone; it is sent once Undo expires. */
@@ -19,7 +26,7 @@ data class UserFeedState(
 }
 
 enum class FeedMode {
-    /** Rows can only be long-pressed, to delete one user. */
+    /** Tapping a row opens the user's details; long-pressing it deletes them. */
     Browse,
 
     /** Tapping a row opens it in the form. */

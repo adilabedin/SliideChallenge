@@ -86,7 +86,9 @@ class UserDetailViewModel(
     init {
         viewModelScope.launch {
             user.first { it == null }
-            _events.send(UserDetailEvent.UserNotFound)
+            // Only worth telling a screen that is showing the user. This ViewModel outlives its screen (it is kept
+            // per user beside the feed), and a queued event would close the details if the same id came back later.
+            _events.trySend(UserDetailEvent.UserNotFound)
         }
     }
 

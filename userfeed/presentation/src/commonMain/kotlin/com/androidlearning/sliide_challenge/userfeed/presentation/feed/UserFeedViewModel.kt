@@ -45,7 +45,7 @@ class UserFeedViewModel(
         }
     }
 
-    /** Everything the screen owns rather than the database: the mode, the selection and pending deletes. */
+    /** Everything the screen owns rather than the database: the mode, the selection, the opened user and deletes. */
     private val screenState = MutableStateFlow(UserFeedState())
 
     /** Users deleted but still in the database: during the undo window and while the repository deletes run. */
@@ -69,6 +69,8 @@ class UserFeedViewModel(
             users = visibleUsers,
             // A ticked user can vanish underneath the selection, e.g. once a sync drops it.
             selectedIds = screenState.selectedIds intersect visibleIds,
+            openedUserId = screenState.openedUserId?.takeIf { it in visibleIds }
+                ?: visibleUsers.firstOrNull()?.id?.takeIf { screenState.showsDetailsBesideList },
         )
     }
         .stateIn(
@@ -82,6 +84,10 @@ class UserFeedViewModel(
             is UserFeedAction.OnUserClick -> onUserClick(action.user)
             is UserFeedAction.OnUserLongClick -> screenState.update {
                 if (it.mode == FeedMode.Browse) it.copy(usersToDelete = listOf(action.user)) else it
+            }
+            UserFeedAction.OnCloseUserClick -> screenState.update { it.copy(openedUserId = null) }
+            is UserFeedAction.OnLayoutChange -> screenState.update {
+                it.copy(showsDetailsBesideList = action.showsDetailsBesideList)
             }
             UserFeedAction.OnEditModeClick -> setMode(FeedMode.Edit)
             UserFeedAction.OnDeleteModeClick -> setMode(FeedMode.Delete)
@@ -111,7 +117,7 @@ class UserFeedViewModel(
 
     private fun onUserClick(user: FeedUserUi) {
         when (screenState.value.mode) {
-            FeedMode.Browse -> Unit
+            FeedMode.Browse -> screenState.update { it.copy(openedUserId = user.id) }
             FeedMode.Edit -> {
                 // Back from the form lands on the plain list rather than still in Edit mode.
                 setMode(FeedMode.Browse)
@@ -133,9 +139,17 @@ class UserFeedViewModel(
         if (users.isEmpty()) return
         // Only one Undo is offered at a time, so an earlier delete still waiting on its Undo is sent now.
         finishDelete()
-        hiddenIds.update { it + users.map(FeedUserUi::id) }
+        val ids = users.map(FeedUserUi::id)
+        hiddenIds.update { it + ids }
         screenState.update {
-            it.copy(mode = FeedMode.Browse, selectedIds = emptySet(), usersToDelete = emptyList(), deletedUsers = users)
+            it.copy(
+                mode = FeedMode.Browse,
+                selectedIds = emptySet(),
+                // Closed for good rather than just hidden, so Undo brings the row back without reopening the details.
+                openedUserId = it.openedUserId?.takeUnless { id -> id in ids },
+                usersToDelete = emptyList(),
+                deletedUsers = users,
+            )
         }
         undoTimer = viewModelScope.launch {
             delay(UNDO_WINDOW)

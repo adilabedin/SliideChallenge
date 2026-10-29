@@ -7,6 +7,7 @@ import assertk.assertions.containsOnly
 import assertk.assertions.isEmpty
 import assertk.assertions.isEqualTo
 import assertk.assertions.isFalse
+import assertk.assertions.isNull
 import assertk.assertions.isTrue
 import com.androidlearning.sliide_challenge.userfeed.domain.FeedUser
 import com.androidlearning.sliide_challenge.userfeed.domain.FeedUserId
@@ -216,19 +217,142 @@ class UserFeedViewModelTest {
         }
     }
 
-    // The screen opens the user's detail screen itself; the ViewModel has nothing to do.
     @Test
-    fun `tapping a user while browsing does nothing`() = runTest {
-        repository.users.value = listOf(ada)
+    fun `tapping a user while browsing opens their details and closing them goes back`() = runTest {
+        repository.users.value = listOf(alan, ada)
         val viewModel = UserFeedViewModel(repository, clock)
 
         viewModel.events.test {
             viewModel.state.test {
-                awaitItem()
+                assertThat(awaitItem().openedUserId).isNull()
                 viewModel.onAction(UserFeedAction.OnUserClick(ada.ui()))
-                expectNoEvents()
+                assertThat(awaitItem().openedUserId).isEqualTo(ada.id)
+
+                // Beside the list another user can be picked straight away.
+                viewModel.onAction(UserFeedAction.OnUserClick(alan.ui()))
+                assertThat(awaitItem().openedUserId).isEqualTo(alan.id)
+
+                viewModel.onAction(UserFeedAction.OnCloseUserClick)
+                assertThat(awaitItem().openedUserId).isNull()
             }
             expectNoEvents()
+        }
+    }
+
+    @Test
+    fun `beside the list the first user is shown until another is picked`() = runTest {
+        repository.users.value = listOf(alan, ada)
+        val viewModel = UserFeedViewModel(repository, clock)
+
+        viewModel.state.test {
+            assertThat(awaitItem().openedUserId).isNull()
+            viewModel.onAction(UserFeedAction.OnLayoutChange(showsDetailsBesideList = true))
+            assertThat(awaitItem().openedUserId).isEqualTo(alan.id)
+
+            viewModel.onAction(UserFeedAction.OnUserClick(ada.ui()))
+            assertThat(awaitItem().openedUserId).isEqualTo(ada.id)
+        }
+    }
+
+    @Test
+    fun `over the list nothing opens until a user is tapped`() = runTest {
+        repository.users.value = listOf(alan, ada)
+        val viewModel = UserFeedViewModel(repository, clock)
+
+        viewModel.state.test {
+            awaitItem()
+            viewModel.onAction(UserFeedAction.OnLayoutChange(showsDetailsBesideList = true))
+            assertThat(awaitItem().openedUserId).isEqualTo(alan.id)
+
+            // Turning a tablet-sized window into a phone-sized one goes back to the list, not to a user never tapped.
+            viewModel.onAction(UserFeedAction.OnLayoutChange(showsDetailsBesideList = false))
+            assertThat(awaitItem().openedUserId).isNull()
+        }
+    }
+
+    @Test
+    fun `beside the list deleting the shown user shows the next first user`() = runTest {
+        repository.users.value = listOf(alan, ada)
+        val viewModel = UserFeedViewModel(repository, clock)
+
+        viewModel.state.test {
+            awaitItem()
+            viewModel.onAction(UserFeedAction.OnLayoutChange(showsDetailsBesideList = true))
+            viewModel.onAction(UserFeedAction.OnDeleteRequested(alan.id))
+            assertThat(expectMostRecentItem().openedUserId).isEqualTo(ada.id)
+        }
+    }
+
+    @Test
+    fun `beside an empty list nothing is shown`() = runTest {
+        val viewModel = UserFeedViewModel(repository, clock)
+
+        viewModel.state.test {
+            awaitItem()
+            viewModel.onAction(UserFeedAction.OnLayoutChange(showsDetailsBesideList = true))
+            assertThat(expectMostRecentItem().openedUserId).isNull()
+        }
+    }
+
+    @Test
+    fun `tapping a user outside browsing does not open their details`() = runTest {
+        repository.users.value = listOf(ada)
+        val viewModel = UserFeedViewModel(repository, clock)
+
+        viewModel.state.test {
+            awaitItem()
+            viewModel.onAction(UserFeedAction.OnDeleteModeClick)
+            viewModel.onAction(UserFeedAction.OnUserClick(ada.ui()))
+            val state = expectMostRecentItem()
+            assertThat(state.selectedIds).containsOnly(ada.id)
+            assertThat(state.openedUserId).isNull()
+        }
+    }
+
+    @Test
+    fun `deleting the opened user closes their details and undo does not reopen them`() = runTest {
+        repository.users.value = listOf(alan, ada)
+        val viewModel = UserFeedViewModel(repository, clock)
+
+        viewModel.state.test {
+            awaitItem()
+            viewModel.onAction(UserFeedAction.OnUserClick(ada.ui()))
+            viewModel.onAction(UserFeedAction.OnDeleteRequested(ada.id))
+            assertThat(expectMostRecentItem().openedUserId).isNull()
+
+            viewModel.onAction(UserFeedAction.OnUndoDeleteClick)
+            val restored = expectMostRecentItem()
+            assertThat(restored.users).containsExactly(alan.ui(), ada.ui())
+            assertThat(restored.openedUserId).isNull()
+        }
+    }
+
+    @Test
+    fun `deleting another user keeps the opened user's details`() = runTest {
+        repository.users.value = listOf(alan, ada)
+        val viewModel = UserFeedViewModel(repository, clock)
+
+        viewModel.state.test {
+            awaitItem()
+            viewModel.onAction(UserFeedAction.OnUserClick(ada.ui()))
+            viewModel.onAction(UserFeedAction.OnUserLongClick(alan.ui()))
+            viewModel.onAction(UserFeedAction.OnDeleteConfirm)
+            assertThat(expectMostRecentItem().openedUserId).isEqualTo(ada.id)
+        }
+    }
+
+    @Test
+    fun `an opened user who leaves the cache is no longer opened`() = runTest {
+        repository.users.value = listOf(alan, ada)
+        val viewModel = UserFeedViewModel(repository, clock)
+
+        viewModel.state.test {
+            awaitItem()
+            viewModel.onAction(UserFeedAction.OnUserClick(ada.ui()))
+            assertThat(awaitItem().openedUserId).isEqualTo(ada.id)
+
+            repository.users.value = listOf(alan)
+            assertThat(awaitItem().openedUserId).isNull()
         }
     }
 
