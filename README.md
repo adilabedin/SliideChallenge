@@ -213,6 +213,30 @@ This is a Kotlin Multiplatform project targeting Android, iOS.
   refresh all share the same time.
 - **Startup fetches only when the cache is empty.** This keeps launch instant and offline-friendly, at the cost of
   showing a cached page until the user refreshes.
+- **Tapping a user opens their detail screen; long-pressing opens a delete confirmation bottom sheet.** A bottom sheet
+  rather than a dialog keeps the destructive choice within thumb reach, and the long press gives haptic feedback. The
+  detail screen ("User") shows the saved details and edits them in place: the app bar's edit button turns the details
+  into prefilled, validated fields, the title into "Edit User" and the button into Save. Back (or the close button)
+  drops an unsaved edit before it leaves the screen, and Save stays disabled until something actually changed, so an
+  untouched save never queues a pointless sync. The feed's own Edit mode still opens the full-screen form.
+- **Delete from the detail screen goes back to the feed for Undo.** The detail screen's Delete button opens the same
+  bottom sheet as the long press (it lives in `presentation/composables`, along with the avatar and validated fields,
+  so any screen in the feature can use them). Confirming does not delete there: the Undo window belongs to
+  `UserFeedViewModel`, so the confirmed id is handed to it (`OnDeleteRequested`) and the app returns to the feed, where
+  the row is hidden and the Undo snackbar appears. One Undo path means one set of rules for when a delete is
+  actually sent.
+- **Undo works by not sending the delete yet, rather than by reversing it.** A delete that has reached GoRest (204)
+  can't be undone: re-creating the user would give it a new id, and could even be refused (422). So "restore the local
+  state before the action is finalized" is read literally. After you confirm, `UserFeedViewModel` only hides the row,
+  which the keyed list animates out, and offers Undo for 5 seconds. When that time runs out it calls `deleteUser`,
+  which removes the row from Room and sends the DELETE (queuing it if offline). Undo simply shows the row again, and no
+  request is ever made. The timer belongs to the ViewModel, not the snackbar, so the delete still goes through if you
+  open another screen meanwhile. Only one Undo is offered at a time, so a second delete sends the first one
+  immediately. Trade-offs:
+  - The 204 arrives after the undo window, not before the row disappears. The offline-first feed never waited for the
+    network to update the UI anyway.
+  - If the app is killed or the feed is closed during those 5 seconds, the delete is never sent and the user is still
+    there next time. We accept that: losing a delete is recoverable, whereas a delete that can't be undone is not.
 
 ### Running the apps
 

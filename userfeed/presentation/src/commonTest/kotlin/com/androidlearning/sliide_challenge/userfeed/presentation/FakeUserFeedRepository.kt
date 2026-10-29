@@ -25,6 +25,7 @@ class FakeUserFeedRepository : UserFeedRepository {
 
     val createCalls = mutableListOf<Pair<String, String>>()
     val updateCalls = mutableListOf<Triple<FeedUserId, String, String>>()
+    val deleteCalls = mutableListOf<FeedUserId>()
 
     /** Creates and updates that got past [pendingSave], i.e. were not cancelled while waiting. */
     var completedSaves = 0
@@ -49,7 +50,12 @@ class FakeUserFeedRepository : UserFeedRepository {
         return nextResult
     }
 
-    override suspend fun deleteUser(id: FeedUserId): EmptyResult<DataError.Network> = Result.Success(Unit)
+    /** Removes the user, like the real local delete, and succeeds. */
+    override suspend fun deleteUser(id: FeedUserId): EmptyResult<DataError.Network> {
+        deleteCalls += id
+        users.update { users -> users.filterNot { it.id == id } }
+        return Result.Success(Unit)
+    }
 
     override fun observeHasPendingSyncs(): Flow<Boolean> = MutableStateFlow(false)
 

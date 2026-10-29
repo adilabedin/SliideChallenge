@@ -1,9 +1,16 @@
 package com.androidlearning.sliide_challenge.userfeed.presentation.feed
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
@@ -15,62 +22,129 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
+import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.navigationevent.NavigationEventInfo
+import androidx.navigationevent.compose.NavigationBackHandler
+import androidx.navigationevent.compose.rememberNavigationEventState
+import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.androidlearning.sliide_challenge.core.designsystem.theme.SliideTheme
+import com.androidlearning.sliide_challenge.core.presentation.util.ObserveAsEvents
 import com.androidlearning.sliide_challenge.userfeed.domain.FeedUserId
+import com.androidlearning.sliide_challenge.userfeed.presentation.composables.DeleteUserSheet
+import com.androidlearning.sliide_challenge.userfeed.presentation.composables.DeleteUsersSheet
 import org.koin.compose.viewmodel.koinViewModel
 
 @Composable
 fun UserFeedRoot(
     onAddUserClick: () -> Unit,
+    onOpenUser: (FeedUserId) -> Unit,
+    onEditUser: (FeedUserId) -> Unit,
     viewModel: UserFeedViewModel = koinViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
-    UserFeedScreen(state = state, onAddUserClick = onAddUserClick)
+
+    ObserveAsEvents(viewModel.events) { event ->
+        when (event) {
+            is UserFeedEvent.EditUser -> onEditUser(event.id)
+        }
+    }
+
+    UserFeedScreen(
+        state = state,
+        onAction = viewModel::onAction,
+        onAddUserClick = onAddUserClick,
+        onOpenUser = onOpenUser,
+    )
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun UserFeedScreen(
     state: UserFeedState,
+    onAction: (UserFeedAction) -> Unit,
     onAddUserClick: () -> Unit,
+    onOpenUser: (FeedUserId) -> Unit,
 ) {
     val listState = rememberLazyListState()
+    val snackbarHostState = remember { SnackbarHostState() }
+    UndoDeleteSnackbar(
+        deletedUsers = state.deletedUsers,
+        snackbarHostState = snackbarHostState,
+        onUndoClick = { onAction(UserFeedAction.OnUndoDeleteClick) },
+    )
     // Shrink to an icon once the list scrolls, so the button covers less of it.
     val isFabExpanded by remember { derivedStateOf { listState.firstVisibleItemIndex == 0 } }
+    // System back leaves Edit or Delete mode before it leaves the screen.
+    NavigationBackHandler(
+        state = rememberNavigationEventState(NavigationEventInfo.None),
+        isBackEnabled = state.mode != FeedMode.Browse,
+        onBackCompleted = { onAction(UserFeedAction.OnExitModeClick) },
+    )
 
     Scaffold(
-        topBar = { TopAppBar(title = { Text("Users") }) },
-        floatingActionButton = {
-            ExtendedFloatingActionButton(
-                text = { Text("Add user") },
-                icon = { Icon(Icons.Default.Add, contentDescription = null) },
-                onClick = onAddUserClick,
-                expanded = isFabExpanded,
+        topBar = {
+            UserFeedTopBar(
+                mode = state.mode,
+                selectedCount = state.selectedIds.size,
+                canChangeMode = state.users.isNotEmpty(),
+                onAction = onAction,
             )
+        },
+        snackbarHost = { SnackbarHost(snackbarHostState) },
+        floatingActionButton = {
+            // Adding a user mid-selection would be confusing, so the button steps aside while a mode is active.
+            AnimatedVisibility(
+                visible = state.mode == FeedMode.Browse,
+                enter = scaleIn() + fadeIn(),
+                exit = scaleOut() + fadeOut(),
+            ) {
+                ExtendedFloatingActionButton(
+                    text = { Text("Add user") },
+                    icon = { Icon(Icons.Default.Add, contentDescription = null) },
+                    onClick = onAddUserClick,
+                    expanded = isFabExpanded,
+                )
+            }
         },
     ) { innerPadding ->
         val modifier = Modifier
@@ -79,15 +153,148 @@ fun UserFeedScreen(
         when {
             state.isLoading -> Box(modifier)
             state.isEmpty -> EmptyUsersContent(modifier)
-            else -> UserList(users = state.users, listState = listState, modifier = modifier)
+            else -> UserList(
+                users = state.users,
+                mode = state.mode,
+                selectedIds = state.selectedIds,
+                listState = listState,
+                // Opening a user is plain navigation; in Edit or Delete mode the ViewModel decides what a tap does.
+                onUserClick = { user ->
+                    if (state.mode == FeedMode.Browse) onOpenUser(user.id) else onAction(UserFeedAction.OnUserClick(user))
+                },
+                onUserLongClick = { onAction(UserFeedAction.OnUserLongClick(it)) },
+                modifier = modifier,
+            )
         }
+    }
+
+    val usersToDelete = state.usersToDelete
+    val userToDelete = usersToDelete.singleOrNull()
+    when {
+        userToDelete != null -> DeleteUserSheet(
+            name = userToDelete.name,
+            email = userToDelete.email,
+            onConfirm = { onAction(UserFeedAction.OnDeleteConfirm) },
+            onDismiss = { onAction(UserFeedAction.OnDeleteDismiss) },
+        )
+        usersToDelete.isNotEmpty() -> DeleteUsersSheet(
+            count = usersToDelete.size,
+            onConfirm = { onAction(UserFeedAction.OnDeleteConfirm) },
+            onDismiss = { onAction(UserFeedAction.OnDeleteDismiss) },
+        )
+    }
+}
+
+/**
+ * Browsing shows the title and a meatball menu for picking Edit or Delete mode. Inside a mode the bar takes a tinted
+ * container, so it is obvious taps now edit or select, and offers a close button (plus Delete for the selection).
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun UserFeedTopBar(
+    mode: FeedMode,
+    selectedCount: Int,
+    canChangeMode: Boolean,
+    onAction: (UserFeedAction) -> Unit,
+) {
+    val containerColor by animateColorAsState(
+        if (mode == FeedMode.Browse) MaterialTheme.colorScheme.surface else MaterialTheme.colorScheme.secondaryContainer,
+    )
+    TopAppBar(
+        colors = TopAppBarDefaults.topAppBarColors(containerColor = containerColor),
+        title = {
+            Text(
+                when (mode) {
+                    FeedMode.Browse -> "Users"
+                    FeedMode.Edit -> "Tap a user to edit"
+                    FeedMode.Delete -> if (selectedCount == 0) "Select users" else "$selectedCount selected"
+                },
+            )
+        },
+        navigationIcon = {
+            if (mode != FeedMode.Browse) {
+                IconButton(onClick = { onAction(UserFeedAction.OnExitModeClick) }) {
+                    Icon(Icons.Default.Close, contentDescription = "Cancel")
+                }
+            }
+        },
+        actions = {
+            when (mode) {
+                FeedMode.Browse -> FeedOverflowMenu(enabled = canChangeMode, onAction = onAction)
+                FeedMode.Edit -> Unit
+                FeedMode.Delete -> IconButton(
+                    onClick = { onAction(UserFeedAction.OnDeleteSelectedClick) },
+                    enabled = selectedCount > 0,
+                ) {
+                    Icon(Icons.Default.Delete, contentDescription = "Delete selected")
+                }
+            }
+        },
+    )
+}
+
+@Composable
+private fun FeedOverflowMenu(
+    enabled: Boolean,
+    onAction: (UserFeedAction) -> Unit,
+) {
+    var isExpanded by remember { mutableStateOf(false) }
+    Box {
+        IconButton(onClick = { isExpanded = true }, enabled = enabled) {
+            // The core icon set has no horizontal "more" icon, so the vertical one is turned on its side.
+            Icon(Icons.Default.MoreVert, contentDescription = "More options", modifier = Modifier.rotate(90f))
+        }
+        DropdownMenu(expanded = isExpanded, onDismissRequest = { isExpanded = false }) {
+            DropdownMenuItem(
+                text = { Text("Edit") },
+                leadingIcon = { Icon(Icons.Default.Edit, contentDescription = null) },
+                onClick = {
+                    isExpanded = false
+                    onAction(UserFeedAction.OnEditModeClick)
+                },
+            )
+            DropdownMenuItem(
+                text = { Text("Delete") },
+                leadingIcon = { Icon(Icons.Default.Delete, contentDescription = null) },
+                onClick = {
+                    isExpanded = false
+                    onAction(UserFeedAction.OnDeleteModeClick)
+                },
+            )
+        }
+    }
+}
+
+/**
+ * Offers Undo for as long as the ViewModel keeps [deletedUsers]; once they clear (Undo expired or another delete took
+ * its place) the effect restarts, which dismisses the snackbar. The ViewModel owns the timer, so the delete still
+ * goes through if this screen leaves composition first.
+ */
+@Composable
+private fun UndoDeleteSnackbar(
+    deletedUsers: List<FeedUserUi>,
+    snackbarHostState: SnackbarHostState,
+    onUndoClick: () -> Unit,
+) {
+    LaunchedEffect(deletedUsers) {
+        if (deletedUsers.isEmpty()) return@LaunchedEffect
+        val result = snackbarHostState.showSnackbar(
+            message = deletedUsers.singleOrNull()?.let { "${it.name} deleted" } ?: "${deletedUsers.size} users deleted",
+            actionLabel = "Undo",
+            duration = SnackbarDuration.Indefinite,
+        )
+        if (result == SnackbarResult.ActionPerformed) onUndoClick()
     }
 }
 
 @Composable
 private fun UserList(
     users: List<FeedUserUi>,
+    mode: FeedMode,
+    selectedIds: Set<FeedUserId>,
     listState: LazyListState,
+    onUserClick: (FeedUserUi) -> Unit,
+    onUserLongClick: (FeedUserUi) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     ScrollToTopOnUserCreated(users = users, listState = listState)
@@ -99,7 +306,13 @@ private fun UserList(
     ) {
         items(items = users, key = { it.id.listKey() }) { user ->
             Column(modifier = Modifier.animateItem()) {
-                UserRow(user)
+                UserRow(
+                    user = user,
+                    mode = mode,
+                    isSelected = user.id in selectedIds,
+                    onClick = { onUserClick(user) },
+                    onLongClick = { onUserLongClick(user) },
+                )
                 HorizontalDivider()
             }
         }
@@ -108,27 +321,62 @@ private fun UserList(
 
 /**
  * A created user is inserted at the top, but a keyed list keeps the previous first row in place, so the new row could
- * land just above the viewport. The count is saveable so this still fires on returning from the form, when the feed
- * has been out of composition while the user was created.
+ * land just above the viewport. Local ids only ever grow, so a new user is one with a higher id than any seen before;
+ * a count would also rise when an undone delete brings a row back. The highest id is saveable so this still fires on
+ * returning from the form, when the feed has been out of composition while the user was created.
  */
 @Composable
 private fun ScrollToTopOnUserCreated(
     users: List<FeedUserUi>,
     listState: LazyListState,
 ) {
-    val createdCount = users.count { it.id is FeedUserId.Created }
-    var previousCreatedCount by rememberSaveable { mutableIntStateOf(createdCount) }
-    LaunchedEffect(createdCount) {
-        if (createdCount > previousCreatedCount) {
+    val newestCreatedId = users.maxOfOrNull { (it.id as? FeedUserId.Created)?.localId ?: 0L } ?: 0L
+    var highestSeenId by rememberSaveable { mutableLongStateOf(newestCreatedId) }
+    LaunchedEffect(newestCreatedId) {
+        if (newestCreatedId > highestSeenId) {
             listState.animateScrollToItem(0)
+            highestSeenId = newestCreatedId
         }
-        previousCreatedCount = createdCount
     }
 }
 
 @Composable
-private fun UserRow(user: FeedUserUi) {
+private fun UserRow(
+    user: FeedUserUi,
+    mode: FeedMode,
+    isSelected: Boolean,
+    onClick: () -> Unit,
+    onLongClick: () -> Unit,
+) {
+    val haptics = LocalHapticFeedback.current
+    val containerColor by animateColorAsState(
+        if (isSelected) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surface,
+    )
     ListItem(
+        modifier = Modifier.combinedClickable(
+            onClickLabel = when (mode) {
+                FeedMode.Browse -> "Open"
+                FeedMode.Edit -> "Edit"
+                FeedMode.Delete -> if (isSelected) "Deselect" else "Select"
+            },
+            onClick = onClick,
+            onLongClickLabel = "Delete",
+            onLongClick = if (mode == FeedMode.Browse) {
+                {
+                    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                    onLongClick()
+                }
+            } else {
+                null
+            },
+        ),
+        colors = ListItemDefaults.colors(containerColor = containerColor),
+        leadingContent = if (mode == FeedMode.Delete) {
+            // The row handles the tap, so the checkbox only shows the state.
+            { Checkbox(checked = isSelected, onCheckedChange = null) }
+        } else {
+            null
+        },
         headlineContent = { Text(user.name) },
         supportingContent = {
             Column {
@@ -143,6 +391,11 @@ private fun UserRow(user: FeedUserUi) {
                     },
                 )
             }
+        },
+        trailingContent = if (mode == FeedMode.Edit) {
+            { Icon(Icons.Default.Edit, contentDescription = null) }
+        } else {
+            null
         },
     )
 }
@@ -197,7 +450,30 @@ private fun UserFeedScreenPreview() {
                     FeedUserUi(FeedUserId.Remote(1), "Ada Lovelace", "ada@example.com", "Synced 5 minutes ago", true),
                 ),
             ),
+            onAction = {},
             onAddUserClick = {},
+            onOpenUser = {},
+        )
+    }
+}
+
+@Preview
+@Composable
+private fun UserFeedScreenDeleteModePreview() {
+    SliideTheme {
+        UserFeedScreen(
+            state = UserFeedState(
+                isLoading = false,
+                users = listOf(
+                    FeedUserUi(FeedUserId.Remote(2), "Alan Turing", "alan@example.com", "Synced just now", true),
+                    FeedUserUi(FeedUserId.Remote(1), "Ada Lovelace", "ada@example.com", "Synced 5 minutes ago", true),
+                ),
+                mode = FeedMode.Delete,
+                selectedIds = setOf(FeedUserId.Remote(1)),
+            ),
+            onAction = {},
+            onAddUserClick = {},
+            onOpenUser = {},
         )
     }
 }
@@ -206,6 +482,6 @@ private fun UserFeedScreenPreview() {
 @Composable
 private fun UserFeedScreenEmptyPreview() {
     SliideTheme {
-        UserFeedScreen(state = UserFeedState(isLoading = false), onAddUserClick = {})
+        UserFeedScreen(state = UserFeedState(isLoading = false), onAction = {}, onAddUserClick = {}, onOpenUser = {})
     }
 }

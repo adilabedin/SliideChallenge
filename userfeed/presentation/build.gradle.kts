@@ -6,6 +6,7 @@ kotlin {
     sourceSets {
         commonMain.dependencies {
             implementation(projects.userfeed.domain)
+            implementation(libs.navigationevent.compose)
         }
     }
 }

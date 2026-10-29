@@ -1,5 +1,6 @@
 package com.androidlearning.sliide_challenge.userfeed.presentation.di
 
+import com.androidlearning.sliide_challenge.userfeed.presentation.detail.UserDetailViewModel
 import com.androidlearning.sliide_challenge.userfeed.presentation.feed.UserFeedViewModel
 import com.androidlearning.sliide_challenge.userfeed.presentation.form.UserFormViewModel
 import org.koin.core.module.Module
@@ -12,4 +13,8 @@ fun userFeedPresentationModule(): Module =
         viewModel { UserFeedViewModel(get()) }
         // The mode comes from the route via `parametersOf`; the SavedStateHandle is supplied by Koin's ViewModel factory.
         viewModel { params -> UserFormViewModel(mode = params.get(), userFeedRepository = get(), savedStateHandle = get()) }
+        // The user id comes from the route the same way; explicit so the default `Clock` is used.
+        viewModel { params ->
+            UserDetailViewModel(userId = params.get(), userFeedRepository = get(), savedStateHandle = get())
+        }
     }
