@@ -28,6 +28,17 @@ import com.androidlearning.sliide_challenge.core.designsystem.theme.SliideTheme
 import com.androidlearning.sliide_challenge.userfeed.domain.EmailValidationError
 import com.androidlearning.sliide_challenge.userfeed.domain.NameValidationError
 import com.androidlearning.sliide_challenge.userfeed.domain.UserValidator
+import com.androidlearning.sliide_challenge.userfeed.presentation.resources.Res
+import com.androidlearning.sliide_challenge.userfeed.presentation.resources.email_error_empty
+import com.androidlearning.sliide_challenge.userfeed.presentation.resources.email_error_invalid_format
+import com.androidlearning.sliide_challenge.userfeed.presentation.resources.email_error_too_long
+import com.androidlearning.sliide_challenge.userfeed.presentation.resources.field_email
+import com.androidlearning.sliide_challenge.userfeed.presentation.resources.field_valid
+import com.androidlearning.sliide_challenge.userfeed.presentation.resources.name_error_empty
+import com.androidlearning.sliide_challenge.userfeed.presentation.resources.name_error_invalid_characters
+import com.androidlearning.sliide_challenge.userfeed.presentation.resources.name_error_too_long
+import com.androidlearning.sliide_challenge.userfeed.presentation.resources.name_error_too_short
+import org.jetbrains.compose.resources.stringResource
 
 /**
  * A single-line field for a user's name or email: shows [errorMessage] under the field, or a tick once [isValid].
@@ -58,7 +69,7 @@ fun UserTextField(
             AnimatedVisibility(visible = isValid, enter = scaleIn() + fadeIn(), exit = scaleOut() + fadeOut()) {
                 Icon(
                     imageVector = Icons.Default.CheckCircle,
-                    contentDescription = "Valid",
+                    contentDescription = stringResource(Res.string.field_valid),
                     tint = MaterialTheme.colorScheme.primary,
                 )
             }
@@ -73,6 +84,7 @@ fun UserTextField(
         modifier = modifier
             .fillMaxWidth()
             .onFocusChanged { focus ->
+                println("FOCUSDBG $label focused=${focus.isFocused}") // TEMP debug
                 if (focus.isFocused) {
                     hasBeenFocused = true
                 } else if (hasBeenFocused) {
@@ -82,19 +94,21 @@ fun UserTextField(
     )
 }
 
+@Composable
 fun NameValidationError.toMessage(): String =
     when (this) {
-        NameValidationError.EMPTY -> "Enter a name"
-        NameValidationError.TOO_SHORT -> "Name must be at least ${UserValidator.NAME_MIN_LENGTH} characters"
-        NameValidationError.TOO_LONG -> "Name must be at most ${UserValidator.NAME_MAX_LENGTH} characters"
-        NameValidationError.INVALID_CHARACTERS -> "Use letters, spaces, hyphens, apostrophes or full stops"
+        NameValidationError.EMPTY -> stringResource(Res.string.name_error_empty)
+        NameValidationError.TOO_SHORT -> stringResource(Res.string.name_error_too_short, UserValidator.NAME_MIN_LENGTH)
+        NameValidationError.TOO_LONG -> stringResource(Res.string.name_error_too_long, UserValidator.NAME_MAX_LENGTH)
+        NameValidationError.INVALID_CHARACTERS -> stringResource(Res.string.name_error_invalid_characters)
     }
 
+@Composable
 fun EmailValidationError.toMessage(): String =
     when (this) {
-        EmailValidationError.EMPTY -> "Enter an email address"
-        EmailValidationError.TOO_LONG -> "Email must be at most ${UserValidator.EMAIL_MAX_LENGTH} characters"
-        EmailValidationError.INVALID_FORMAT -> "Enter a valid email, e.g. name@example.com"
+        EmailValidationError.EMPTY -> stringResource(Res.string.email_error_empty)
+        EmailValidationError.TOO_LONG -> stringResource(Res.string.email_error_too_long, UserValidator.EMAIL_MAX_LENGTH)
+        EmailValidationError.INVALID_FORMAT -> stringResource(Res.string.email_error_invalid_format)
     }
 
 @Preview
@@ -105,7 +119,7 @@ private fun UserTextFieldErrorPreview() {
             value = "ada@example",
             onValueChange = {},
             onFocusLost = {},
-            label = "Email",
+            label = stringResource(Res.string.field_email),
             leadingIcon = Icons.Default.Email,
             errorMessage = EmailValidationError.INVALID_FORMAT.toMessage(),
             isValid = false,

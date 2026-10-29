@@ -38,6 +38,10 @@ import com.androidlearning.sliide_challenge.userfeed.presentation.composables.Us
 import com.androidlearning.sliide_challenge.userfeed.presentation.composables.UserTopBar
 import com.androidlearning.sliide_challenge.userfeed.presentation.composables.toMessage
 import com.androidlearning.sliide_challenge.userfeed.presentation.feed.FeedUserUi
+import com.androidlearning.sliide_challenge.userfeed.presentation.feed.SyncStatus
+import com.androidlearning.sliide_challenge.userfeed.presentation.feed.TimeAgo
+import com.androidlearning.sliide_challenge.userfeed.presentation.feed.asString
+import com.androidlearning.sliide_challenge.userfeed.presentation.resources.Res
 import org.koin.compose.viewmodel.koinViewModel
 import org.koin.core.parameter.parametersOf
 
@@ -144,7 +148,7 @@ fun UserDetailScreen(
                             UserDetails(
                                 name = user.name,
                                 email = user.email,
-                                syncStatus = user.syncStatus,
+                                syncStatus = user.syncStatus.asString(),
                                 isSynced = user.isSynced,
                             )
                         }
@@ -172,7 +176,7 @@ fun UserDetailScreen(
     }
 }
 
-private val previewUser = FeedUserUi(FeedUserId.Remote(1), "Ada Lovelace", "ada@example.com", "Synced 5 minutes ago", true)
+private val previewUser = FeedUserUi(FeedUserId.Remote(1), "Ada Lovelace", "ada@example.com", SyncStatus.Synced(TimeAgo.Minutes(5)), true)
 
 @Preview
 @Composable

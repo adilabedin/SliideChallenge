@@ -1,5 +1,7 @@
 package com.androidlearning.sliide_challenge.userfeed.data
 
+import com.androidlearning.sliide_challenge.core.data.user.UserDto
+import com.androidlearning.sliide_challenge.core.database.DatabaseTransactionRunner
 import com.androidlearning.sliide_challenge.core.database.user.CreateUserPendingSyncEntity
 import com.androidlearning.sliide_challenge.core.database.user.CreatedUserDao
 import com.androidlearning.sliide_challenge.core.database.user.CreatedUserEntity
@@ -9,16 +11,16 @@ import com.androidlearning.sliide_challenge.core.database.user.RejectedCreationE
 import com.androidlearning.sliide_challenge.core.database.user.UpdateUserPendingSyncEntity
 import com.androidlearning.sliide_challenge.core.database.user.UserDao
 import com.androidlearning.sliide_challenge.core.database.user.UserPendingSyncDao
+import com.androidlearning.sliide_challenge.core.domain.user.MainRepository
+import com.androidlearning.sliide_challenge.core.domain.util.ApplicationScope
 import com.androidlearning.sliide_challenge.core.domain.util.DataError
 import com.androidlearning.sliide_challenge.core.domain.util.EmptyResult
 import com.androidlearning.sliide_challenge.core.domain.util.Result
-import com.androidlearning.sliide_challenge.core.domain.util.asEmptyResult
-import com.androidlearning.sliide_challenge.core.domain.util.onFailure
-import com.androidlearning.sliide_challenge.core.domain.util.onSuccess
 import com.androidlearning.sliide_challenge.userfeed.domain.FeedUser
 import com.androidlearning.sliide_challenge.userfeed.domain.FeedUserId
 import com.androidlearning.sliide_challenge.userfeed.domain.RejectedCreation
 import com.androidlearning.sliide_challenge.userfeed.domain.UserFeedRepository
+import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
@@ -27,9 +29,10 @@ import kotlinx.coroutines.sync.withLock
 import kotlin.time.Clock
 
 /**
- * Room is the single source of truth. Each change is written locally first, then sent to GoRest; a failed request is
- * queued in the pending-sync tables, which [syncPendingChanges] drains. Changes to a created user that has not been
- * POSTed stay local, since its pending create will carry them.
+ * Room is the single source of truth. Each change is written locally together with its entry in the pending-sync
+ * tables, in one transaction, and only then sent to GoRest; the entry is removed once GoRest accepts it. So a change
+ * that has been saved is never lost, even if the app dies mid-request: [syncPendingChanges] sends whatever is left.
+ * Changes to a created user that has not been POSTed stay local, since its pending create will carry them.
  */
 class OfflineFirstUserFeedRepository(
     private val userFeedApi: UserFeedApi,
@@ -37,8 +40,17 @@ class OfflineFirstUserFeedRepository(
     private val createdUserDao: CreatedUserDao,
     private val pendingSyncDao: UserPendingSyncDao,
     private val rejectedCreationDao: RejectedCreationDao,
+    private val transactionRunner: DatabaseTransactionRunner,
+    private val mainRepository: MainRepository,
+    private val applicationScope: ApplicationScope,
     private val clock: Clock = Clock.System,
 ) : UserFeedRepository {
+
+    /**
+     * Requests are sent one at a time, so a background sync and a change the user just made never send the same
+     * queued entry twice, and an older edit can never reach GoRest after a newer one.
+     */
+    private val syncMutex = Mutex()
 
     override fun observeUsers(): Flow<List<FeedUser>> = combine(
         createdUserDao.getAll(),
@@ -53,57 +65,59 @@ class OfflineFirstUserFeedRepository(
             cached.filterNot { it.id in hiddenIds }.map { it.toFeedUser(pendingEdits[it.id]) }
     }
 
-    override suspend fun createUser(name: String, email: String): EmptyResult<DataError.Network> {
-        val localId = createdUserDao.upsert(
-            CreatedUserEntity(name = name, email = email, createdAt = nowMillis()),
-        )
-        return userFeedApi.createUser(name, email)
-            .onSuccess { created -> createdUserDao.setRemoteId(localId, created.id, nowMillis()) }
-            .onFailure { error ->
-                if (error == DataError.Network.UNPROCESSABLE_ENTITY) {
-                    rejectCreation(localId, name, email)
-                } else {
-                    pendingSyncDao.upsertCreatePendingSync(CreateUserPendingSyncEntity(localId))
+    override suspend fun createUser(name: String, email: String): EmptyResult<DataError.Network> = outliveCaller {
+        val localId = transactionRunner.runInTransaction {
+            createdUserDao.upsert(CreatedUserEntity(name = name, email = email, createdAt = nowMillis()))
+                .also { pendingSyncDao.upsertCreatePendingSync(CreateUserPendingSyncEntity(it)) }
+        }
+        send { syncCreate(localId) }
+    }
+
+    override suspend fun refreshUsers(): EmptyResult<DataError.Network> {
+        // Sent first so the fetched page already reflects them; whatever fails stays queued, so only the fetch's
+        // outcome is reported.
+        syncPendingChanges()
+        return mainRepository.loadUsers()
+    }
+
+    override suspend fun updateUser(id: FeedUserId, name: String, email: String): EmptyResult<DataError.Network> =
+        outliveCaller {
+            // The GoRest id to PATCH, or null when there is nothing to send.
+            val remoteId = transactionRunner.runInTransaction {
+                when (id) {
+                    is FeedUserId.Created -> {
+                        // Null if already deleted, or not POSTed yet: then its pending create carries the edit.
+                        val remoteId = createdUserDao.getByLocalId(id.localId)?.remoteId
+                        createdUserDao.updateDetails(id.localId, name, email)
+                        remoteId?.also { queueUpdate(it, name, email) }
+                    }
+                    is FeedUserId.Remote -> {
+                        userDao.updateDetails(id.id, name, email)
+                        id.id.also { queueUpdate(it, name, email) }
+                    }
                 }
             }
-            .asEmptyResult()
-    }
-
-    override suspend fun updateUser(id: FeedUserId, name: String, email: String): EmptyResult<DataError.Network> {
-        return when (id) {
-            is FeedUserId.Created -> {
-                // Already deleted: nothing left to edit.
-                val user = createdUserDao.getByLocalId(id.localId) ?: return Result.Success(Unit)
-                createdUserDao.updateDetails(id.localId, name, email)
-                val remoteId = user.remoteId ?: return Result.Success(Unit)
-                sendUpdate(remoteId, name, email)
-            }
-            is FeedUserId.Remote -> {
-                userDao.updateDetails(id.id, name, email)
-                sendUpdate(id.id, name, email)
-            }
+            if (remoteId == null) Result.Success(Unit) else send { syncUpdate(remoteId) }
         }
-    }
 
-    override suspend fun deleteUser(id: FeedUserId): EmptyResult<DataError.Network> {
-        return when (id) {
-            is FeedUserId.Created -> {
-                val user = createdUserDao.getByLocalId(id.localId) ?: return Result.Success(Unit)
-                createdUserDao.deleteByLocalId(id.localId)
-                val remoteId = user.remoteId
-                if (remoteId == null) {
-                    // Never reached the server, so dropping the pending create is the whole delete.
+    override suspend fun deleteUser(id: FeedUserId): EmptyResult<DataError.Network> = outliveCaller {
+        // The GoRest id to DELETE, or null when the user never reached GoRest.
+        val remoteId = transactionRunner.runInTransaction {
+            when (id) {
+                is FeedUserId.Created -> {
+                    val remoteId = createdUserDao.getByLocalId(id.localId)?.remoteId
+                    createdUserDao.deleteByLocalId(id.localId)
+                    // If it was never POSTed, dropping its pending create is the whole delete.
                     pendingSyncDao.deleteCreatePendingSync(id.localId)
-                    Result.Success(Unit)
-                } else {
-                    sendDelete(remoteId)
+                    remoteId?.also { queueDelete(it) }
+                }
+                is FeedUserId.Remote -> {
+                    userDao.deleteById(id.id)
+                    id.id.also { queueDelete(it) }
                 }
             }
-            is FeedUserId.Remote -> {
-                userDao.deleteById(id.id)
-                sendDelete(id.id)
-            }
         }
+        if (remoteId == null) Result.Success(Unit) else send { syncDelete(remoteId) }
     }
 
     override fun observeRejectedCreations(): Flow<List<RejectedCreation>> =
@@ -113,63 +127,103 @@ class OfflineFirstUserFeedRepository(
         rejectedCreationDao.deleteById(id)
     }
 
-    /** GoRest will never accept this user (422), so retrying is pointless: drop it and keep a record for the UI. */
-    private suspend fun rejectCreation(localId: Long, name: String, email: String) {
-        createdUserDao.deleteByLocalId(localId)
-        rejectedCreationDao.insert(RejectedCreationEntity(name = name, email = email))
-    }
-
     override fun observeHasPendingSyncs(): Flow<Boolean> = pendingSyncDao.observeHasPendingSyncs()
-
-    /** Background and foreground syncs can overlap (iOS); without this, both would send the same queued changes. */
-    private val syncMutex = Mutex()
 
     override suspend fun syncPendingChanges(): EmptyResult<DataError.Network> = syncMutex.withLock {
         // Creates go first: one created and then edited or deleted during its POST queues that follow-up below.
         val errors = pendingSyncDao.getCreatePendingSyncs().mapNotNull { syncCreate(it.localId) } +
-            pendingSyncDao.getUpdatePendingSyncs().mapNotNull { syncUpdate(it) } +
+            pendingSyncDao.getUpdatePendingSyncs().mapNotNull { syncUpdate(it.userId) } +
             pendingSyncDao.getDeletePendingSyncs().mapNotNull { syncDelete(it.userId) }
         errors.firstOrNull()?.let { Result.Error(it) } ?: Result.Success(Unit)
     }
 
-    /** Each sync step returns the error that kept its change queued, or null once the change is no longer pending. */
+    /**
+     * A change the user has saved is written and sent even if the screen that asked for it closes meanwhile; the
+     * caller still gets the outcome if it is around to wait for it.
+     */
+    private suspend fun outliveCaller(
+        block: suspend () -> EmptyResult<DataError.Network>,
+    ): EmptyResult<DataError.Network> = applicationScope.async { block() }.await()
+
+    /** Sends one queued change right away, in turn with any sync already running. */
+    private suspend fun send(sync: suspend () -> DataError.Network?): EmptyResult<DataError.Network> =
+        syncMutex.withLock { sync() }?.let { Result.Error(it) } ?: Result.Success(Unit)
+
+    /*
+     * Each sync step re-reads its queue entry, since a sync that ran meanwhile may already have sent it, and returns
+     * the error its request failed with, or null once the change is no longer pending.
+     */
+
     private suspend fun syncCreate(localId: Long): DataError.Network? {
+        val pending = pendingSyncDao.getCreatePendingSync(localId) ?: return null
         val user = createdUserDao.getByLocalId(localId)
         if (user == null) {
             pendingSyncDao.deleteCreatePendingSync(localId)
             return null
         }
-        val remoteId = when (val result = userFeedApi.createUser(user.name, user.email)) {
+        pendingSyncDao.markCreatePendingSyncSent(localId)
+        val created = when (val result = userFeedApi.createUser(user.name, user.email)) {
+            is Result.Success -> result.data.copy(name = user.name, email = user.email)
             is Result.Error -> {
                 if (result.error != DataError.Network.UNPROCESSABLE_ENTITY) return result.error
-                rejectCreation(localId, user.name, user.email)
-                pendingSyncDao.deleteCreatePendingSync(localId)
-                return null
+                val lost = if (pending.wasSent) {
+                    when (val lookup = findLostCreate(user)) {
+                        is Result.Error -> return lookup.error
+                        is Result.Success -> lookup.data
+                    }
+                } else {
+                    null
+                }
+                if (lost == null) {
+                    rejectCreation(localId, user.name, user.email)
+                    return result.error
+                }
+                lost
             }
-            is Result.Success -> result.data.id
         }
-        // From here on, edits and deletes send their own requests. Ones made during the POST only touched the row,
-        // so compare it against what was sent.
-        createdUserDao.setRemoteId(localId, remoteId, nowMillis())
-        val latest = createdUserDao.getByLocalId(localId)
-        if (latest == null) {
-            pendingSyncDao.upsertDeletePendingSync(DeleteUserPendingSyncEntity(remoteId))
-        } else if (latest.name != user.name || latest.email != user.email) {
-            pendingSyncDao.upsertUpdatePendingSync(
-                UpdateUserPendingSyncEntity(
-                    userId = remoteId,
-                    name = latest.name,
-                    email = latest.email,
-                    updatedAt = nowMillis(),
-                ),
-            )
-        }
-        // Removed last so the queues are never briefly empty while a follow-up is still to be queued.
-        pendingSyncDao.deleteCreatePendingSync(localId)
+        recordCreated(localId, created)
         return null
     }
 
-    private suspend fun syncUpdate(edit: UpdateUserPendingSyncEntity): DataError.Network? {
+    /**
+     * An earlier POST of [user] may have reached GoRest with its 201 lost, so the resend is refused because the email
+     * is now taken. That user is ours if it has the same name too; otherwise someone else holds the email.
+     */
+    private suspend fun findLostCreate(user: CreatedUserEntity): Result<UserDto?, DataError.Network> =
+        when (val result = userFeedApi.findUserByEmail(user.email)) {
+            is Result.Error -> result
+            is Result.Success -> Result.Success(result.data?.takeIf { it.name == user.name })
+        }
+
+    /**
+     * From here on, edits and deletes send their own requests. Ones made during the POST only touched the row, so it
+     * is compared against what GoRest now holds ([created]).
+     */
+    private suspend fun recordCreated(localId: Long, created: UserDto) {
+        transactionRunner.runInTransaction {
+            createdUserDao.setRemoteId(localId, created.id, nowMillis())
+            val latest = createdUserDao.getByLocalId(localId)
+            if (latest == null) {
+                queueDelete(created.id)
+            } else if (latest.name != created.name || latest.email != created.email) {
+                queueUpdate(created.id, latest.name, latest.email)
+            }
+            pendingSyncDao.deleteCreatePendingSync(localId)
+        }
+    }
+
+    /** GoRest will never accept this user (422), so retrying is pointless: drop it and keep a record for the UI. */
+    private suspend fun rejectCreation(localId: Long, name: String, email: String) {
+        transactionRunner.runInTransaction {
+            createdUserDao.deleteByLocalId(localId)
+            pendingSyncDao.deleteCreatePendingSync(localId)
+            rejectedCreationDao.insert(RejectedCreationEntity(name = name, email = email))
+        }
+    }
+
+    private suspend fun syncUpdate(userId: Long): DataError.Network? {
+        // Read now, so the latest edit is the one sent.
+        val edit = pendingSyncDao.getUpdatePendingSync(userId) ?: return null
         val error = when (val result = userFeedApi.updateUser(edit.userId, edit.name, edit.email)) {
             is Result.Success -> {
                 userDao.updateDetails(edit.userId, edit.name, edit.email)
@@ -184,6 +238,7 @@ class OfflineFirstUserFeedRepository(
     }
 
     private suspend fun syncDelete(userId: Long): DataError.Network? {
+        pendingSyncDao.getDeletePendingSync(userId) ?: return null
         val result = userFeedApi.deleteUser(userId)
         // NOT_FOUND means the user is already gone, which is what the delete wanted.
         if (result is Result.Error && result.error != DataError.Network.NOT_FOUND) return result.error
@@ -191,24 +246,18 @@ class OfflineFirstUserFeedRepository(
         return null
     }
 
-    private suspend fun sendUpdate(remoteId: Long, name: String, email: String): EmptyResult<DataError.Network> =
-        userFeedApi.updateUser(remoteId, name, email)
-            .onSuccess {
-                markSynced(remoteId)
-                // An older queued edit would overwrite this one when it syncs.
-                pendingSyncDao.deleteUpdatePendingSync(remoteId)
-            }
-            .onFailure {
-                pendingSyncDao.upsertUpdatePendingSync(
-                    UpdateUserPendingSyncEntity(
-                        userId = remoteId,
-                        name = name,
-                        email = email,
-                        updatedAt = nowMillis(),
-                    ),
-                )
-            }
-            .asEmptyResult()
+    /** Replaces any older queued edit of the user, so only the latest one is sent. */
+    private suspend fun queueUpdate(remoteId: Long, name: String, email: String) {
+        pendingSyncDao.upsertUpdatePendingSync(
+            UpdateUserPendingSyncEntity(userId = remoteId, name = name, email = email, updatedAt = nowMillis()),
+        )
+    }
+
+    private suspend fun queueDelete(remoteId: Long) {
+        // A queued edit of a deleted user must never be sent.
+        pendingSyncDao.deleteUpdatePendingSync(remoteId)
+        pendingSyncDao.upsertDeletePendingSync(DeleteUserPendingSyncEntity(remoteId))
+    }
 
     /** A user is addressed by its GoRest id in either table, so stamp whichever holds it. */
     private suspend fun markSynced(remoteId: Long) {
@@ -218,11 +267,4 @@ class OfflineFirstUserFeedRepository(
     }
 
     private fun nowMillis(): Long = clock.now().toEpochMilliseconds()
-
-    private suspend fun sendDelete(remoteId: Long): EmptyResult<DataError.Network> {
-        // Whether or not the delete goes through, a queued edit of this user must never be sent.
-        pendingSyncDao.deleteUpdatePendingSync(remoteId)
-        return userFeedApi.deleteUser(remoteId)
-            .onFailure { pendingSyncDao.upsertDeletePendingSync(DeleteUserPendingSyncEntity(remoteId)) }
-    }
 }

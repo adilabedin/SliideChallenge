@@ -8,6 +8,7 @@ import assertk.assertions.isEqualTo
 import assertk.assertions.isFalse
 import assertk.assertions.isTrue
 import com.androidlearning.sliide_challenge.core.data.user.UserDto
+import com.androidlearning.sliide_challenge.core.database.DatabaseTransactionRunner
 import com.androidlearning.sliide_challenge.core.database.user.CreateUserPendingSyncEntity
 import com.androidlearning.sliide_challenge.core.database.user.CreatedUserDao
 import com.androidlearning.sliide_challenge.core.database.user.CreatedUserEntity
@@ -18,12 +19,19 @@ import com.androidlearning.sliide_challenge.core.database.user.UpdateUserPending
 import com.androidlearning.sliide_challenge.core.database.user.UserDao
 import com.androidlearning.sliide_challenge.core.database.user.UserEntity
 import com.androidlearning.sliide_challenge.core.database.user.UserPendingSyncDao
+import com.androidlearning.sliide_challenge.core.domain.user.MainRepository
+import com.androidlearning.sliide_challenge.core.domain.user.User
+import com.androidlearning.sliide_challenge.core.domain.util.ApplicationScope
 import com.androidlearning.sliide_challenge.core.domain.util.DataError
 import com.androidlearning.sliide_challenge.core.domain.util.EmptyResult
 import com.androidlearning.sliide_challenge.core.domain.util.Result
 import com.androidlearning.sliide_challenge.userfeed.domain.FeedUser
 import com.androidlearning.sliide_challenge.userfeed.domain.FeedUserId
 import com.androidlearning.sliide_challenge.userfeed.domain.RejectedCreation
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
@@ -32,16 +40,21 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.test.TestScope
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.time.Clock
 import kotlin.time.Instant
 
+@OptIn(ExperimentalCoroutinesApi::class)
 class OfflineFirstUserFeedRepositoryTest {
 
     private class FakeUserFeedApi : UserFeedApi {
         var createResult: Result<UserDto, DataError.Network> = Result.Success(UserDto(100, "", ""))
         var updateResult: Result<UserDto, DataError.Network> = Result.Success(UserDto(1, "", ""))
+        var findResult: Result<UserDto?, DataError.Network> = Result.Success(null)
         var deleteResult: EmptyResult<DataError.Network> = Result.Success(Unit)
         val calls = mutableListOf<String>()
 
@@ -54,7 +67,14 @@ class OfflineFirstUserFeedRepositoryTest {
         override suspend fun updateUser(id: Long, name: String, email: String) =
             updateResult.also { calls += "PATCH $id $name"; duringRequest() }
 
+        override suspend fun findUserByEmail(email: String) = findResult.also { calls += "GET email $email" }
+
         override suspend fun deleteUser(id: Long) = deleteResult.also { calls += "DELETE $id"; duringRequest() }
+    }
+
+    /** No real transaction: the fakes never suspend inside one, so its writes already land together. */
+    private class FakeTransactionRunner : DatabaseTransactionRunner {
+        override suspend fun <R> runInTransaction(block: suspend () -> R): R = block()
     }
 
     private class FakeUserDao : UserDao {
@@ -85,6 +105,24 @@ class OfflineFirstUserFeedRepositoryTest {
         }
 
         override fun getAll(): Flow<List<UserEntity>> = rows.map { it.values.sortedByDescending(UserEntity::id) }
+    }
+
+    /** Like the real one: a successful load replaces the cached page, a failed one leaves it alone. */
+    private class FakeMainRepository(
+        private val userDao: UserDao,
+        private val calls: MutableList<String>,
+    ) : MainRepository {
+        var lastPage: List<UserEntity> = emptyList()
+        var loadError: DataError.Network? = null
+
+        override fun observeUsers(): Flow<List<User>> = error("Not used by the feed repository")
+
+        override suspend fun loadUsers(): EmptyResult<DataError.Network> {
+            calls += "GET last page"
+            loadError?.let { return Result.Error(it) }
+            userDao.replaceAll(lastPage)
+            return Result.Success(Unit)
+        }
     }
 
     private class FakeCreatedUserDao : CreatedUserDao {
@@ -132,6 +170,12 @@ class OfflineFirstUserFeedRepositoryTest {
 
         override suspend fun getCreatePendingSyncs() = creates.value.values.toList()
 
+        override suspend fun getCreatePendingSync(localId: Long) = creates.value[localId]
+
+        override suspend fun markCreatePendingSyncSent(localId: Long) {
+            creates.value[localId]?.let { creates.value += localId to it.copy(wasSent = true) }
+        }
+
         override suspend fun deleteCreatePendingSync(localId: Long) {
             creates.value -= localId
         }
@@ -141,6 +185,8 @@ class OfflineFirstUserFeedRepositoryTest {
         }
 
         override suspend fun getUpdatePendingSyncs() = updates.value.values.toList()
+
+        override suspend fun getUpdatePendingSync(userId: Long) = updates.value[userId]
 
         override fun observeUpdatePendingSyncs(): Flow<List<UpdateUserPendingSyncEntity>> =
             updates.map { it.values.toList() }
@@ -158,6 +204,8 @@ class OfflineFirstUserFeedRepositoryTest {
         }
 
         override suspend fun getDeletePendingSyncs() = deletes.value.values.toList()
+
+        override suspend fun getDeletePendingSync(userId: Long) = deletes.value[userId]
 
         override fun observeDeletePendingSyncs(): Flow<List<DeleteUserPendingSyncEntity>> =
             deletes.map { it.values.toList() }
@@ -191,12 +239,16 @@ class OfflineFirstUserFeedRepositoryTest {
     private val createdUserDao = FakeCreatedUserDao()
     private val pendingSyncDao = FakeUserPendingSyncDao()
     private val rejectedCreationDao = FakeRejectedCreationDao()
+    private val mainRepository = FakeMainRepository(userDao, api.calls)
     private val repository = OfflineFirstUserFeedRepository(
         userFeedApi = api,
         userDao = userDao,
         createdUserDao = createdUserDao,
         pendingSyncDao = pendingSyncDao,
         rejectedCreationDao = rejectedCreationDao,
+        transactionRunner = FakeTransactionRunner(),
+        mainRepository = mainRepository,
+        applicationScope = ApplicationScope(TestScope(UnconfinedTestDispatcher())),
         clock = object : Clock {
             override fun now() = this@OfflineFirstUserFeedRepositoryTest.now
         },
@@ -258,15 +310,78 @@ class OfflineFirstUserFeedRepositoryTest {
             assertThat(awaitItem()).isEmpty()
 
             repository.createUser("Grace", "grace@x.io")
-            assertThat(awaitItem()).containsExactly(FeedUser(FeedUserId.Created(1), "Grace", "grace@x.io", null))
-            assertThat(awaitItem()).containsExactly(FeedUser(FeedUserId.Created(1), "Grace", "grace@x.io", now))
+            assertThat(expectMostRecentItem())
+                .containsExactly(FeedUser(FeedUserId.Created(1), "Grace", "grace@x.io", now))
 
             repository.updateUser(FeedUserId.Created(1), "Grace H", "grace@x.io")
-            assertThat(awaitItem()).containsExactly(FeedUser(FeedUserId.Created(1), "Grace H", "grace@x.io", now))
+            assertThat(expectMostRecentItem())
+                .containsExactly(FeedUser(FeedUserId.Created(1), "Grace H", "grace@x.io", now))
 
             repository.deleteUser(FeedUserId.Created(1))
-            assertThat(awaitItem()).isEmpty()
+            assertThat(expectMostRecentItem()).isEmpty()
         }
+    }
+
+    @Test
+    fun `a saved change is shown as unsynced before it reaches GoRest`() = runTest {
+        userDao.insertAll(listOf(ada))
+        val shownDuringRequest = mutableListOf<List<FeedUser>>()
+        api.duringRequest = { shownDuringRequest += feed() }
+
+        repository.createUser("Grace", "grace@x.io")
+        repository.updateUser(FeedUserId.Remote(1), "Ada L", "ada@l.io")
+
+        assertThat(shownDuringRequest).containsExactly(
+            listOf(
+                FeedUser(FeedUserId.Created(1), "Grace", "grace@x.io", null),
+                FeedUser(FeedUserId.Remote(1), "Ada", "ada@x.io", fetchedAt),
+            ),
+            listOf(
+                FeedUser(FeedUserId.Created(1), "Grace", "grace@x.io", now),
+                FeedUser(FeedUserId.Remote(1), "Ada L", "ada@l.io", null),
+            ),
+        )
+    }
+
+    // refreshUsers
+
+    @Test
+    fun `refresh sends queued changes before fetching the last page`() = runTest {
+        userDao.insertAll(listOf(ada))
+        pendingSyncDao.upsertDeletePendingSync(DeleteUserPendingSyncEntity(1))
+
+        repository.refreshUsers()
+
+        assertThat(api.calls).containsExactly("DELETE 1", "GET last page")
+    }
+
+    @Test
+    fun `refresh replaces the cached page and keeps created users on top`() = runTest {
+        userDao.insertAll(listOf(ada))
+        createdUserDao.upsert(CreatedUserEntity(name = "Grace", email = "grace@x.io", createdAt = 1))
+        mainRepository.lastPage = listOf(alan)
+
+        val result = repository.refreshUsers()
+
+        assertThat(result).isEqualTo(Result.Success(Unit))
+        assertThat(feed().map { it.id }).containsExactly(FeedUserId.Created(1), FeedUserId.Remote(2))
+    }
+
+    @Test
+    fun `refresh offline reports the error and keeps the cache and queued changes`() = runTest {
+        userDao.insertAll(listOf(ada, alan))
+        createdUserDao.upsert(CreatedUserEntity(name = "Grace", email = "grace@x.io", createdAt = 1))
+        pendingSyncDao.upsertCreatePendingSync(CreateUserPendingSyncEntity(1))
+        api.createResult = Result.Error(DataError.Network.NO_INTERNET)
+        mainRepository.loadError = DataError.Network.NO_INTERNET
+
+        val result = repository.refreshUsers()
+
+        assertThat(result).isEqualTo(Result.Error(DataError.Network.NO_INTERNET))
+        assertThat(feed().map { it.id })
+            .containsExactly(FeedUserId.Created(1), FeedUserId.Remote(2), FeedUserId.Remote(1))
+        assertThat(pendingSyncDao.getCreatePendingSyncs())
+            .containsExactly(CreateUserPendingSyncEntity(1, wasSent = true))
     }
 
     // createUser
@@ -299,16 +414,43 @@ class OfflineFirstUserFeedRepositoryTest {
         assertThat(createdUserDao.rows.value.values.toList()).containsExactly(
             CreatedUserEntity(localId = 1, remoteId = null, name = "Grace", email = "grace@x.io", createdAt = 1_000),
         )
-        assertThat(pendingSyncDao.creates.value.values.toList()).containsExactly(CreateUserPendingSyncEntity(1))
+        assertThat(pendingSyncDao.creates.value.values.toList())
+            .containsExactly(CreateUserPendingSyncEntity(1, wasSent = true))
     }
 
     @Test
-    fun `create rejected by GoRest removes the user and records the rejection`() = runTest {
+    fun `a create is queued before it is posted so it survives the app dying mid-request`() = runTest {
+        var queuedDuringPost: List<CreateUserPendingSyncEntity>? = null
+        api.duringRequest = { queuedDuringPost = pendingSyncDao.creates.value.values.toList() }
+
+        repository.createUser("Grace", "grace@x.io")
+
+        assertThat(queuedDuringPost).isEqualTo(listOf(CreateUserPendingSyncEntity(1, wasSent = true)))
+    }
+
+    @Test
+    fun `a create keeps going when the caller is cancelled mid-request`() = runTest {
+        val response = CompletableDeferred<Unit>()
+        api.duringRequest = { response.await() }
+
+        val caller = launch { repository.createUser("Grace", "grace@x.io") }
+        runCurrent()
+        caller.cancel()
+        response.complete(Unit)
+
+        assertThat(createdUserDao.rows.value.getValue(1).remoteId).isEqualTo(100L)
+        assertThat(pendingSyncDao.creates.value).isEmpty()
+    }
+
+    @Test
+    fun `create rejected by GoRest removes the user and records the rejection without a lookup`() = runTest {
         api.createResult = Result.Error(DataError.Network.UNPROCESSABLE_ENTITY)
 
         val result = repository.createUser("Grace", "grace@x.io")
 
         assertThat(result).isEqualTo(Result.Error(DataError.Network.UNPROCESSABLE_ENTITY))
+        // A first POST can't have been lost, so the email really is taken by someone else.
+        assertThat(api.calls).containsExactly("POST Grace")
         assertThat(createdUserDao.rows.value).isEmpty()
         assertThat(pendingSyncDao.creates.value).isEmpty()
         assertThat(repository.observeRejectedCreations().first())
@@ -351,6 +493,65 @@ class OfflineFirstUserFeedRepositoryTest {
         assertThat(pendingSyncDao.updates.value.values.toList()).containsExactly(
             UpdateUserPendingSyncEntity(1, "Ada L", "ada@l.io", updatedAt = 1_000),
         )
+    }
+
+    @Test
+    fun `an edit is queued before it is patched so it survives the app dying mid-request`() = runTest {
+        userDao.insertAll(listOf(ada))
+        var queuedDuringPatch: List<UpdateUserPendingSyncEntity>? = null
+        api.duringRequest = { queuedDuringPatch = pendingSyncDao.updates.value.values.toList() }
+
+        repository.updateUser(FeedUserId.Remote(1), "Ada L", "ada@l.io")
+
+        assertThat(queuedDuringPatch)
+            .isEqualTo(listOf(UpdateUserPendingSyncEntity(1, "Ada L", "ada@l.io", updatedAt = 1_000)))
+    }
+
+    @Test
+    fun `an edit saved while an older one is being patched is sent after it and wins`() = runTest {
+        userDao.insertAll(listOf(ada))
+        api.updateResult = Result.Error(DataError.Network.NO_INTERNET)
+        repository.updateUser(FeedUserId.Remote(1), "Ada A", "ada@x.io")
+        api.updateResult = Result.Success(UserDto(1, "", ""))
+        api.calls.clear()
+        var newerSave: Job? = null
+        api.duringRequest = {
+            api.duringRequest = {}
+            now = Instant.fromEpochMilliseconds(2_000)
+            // Undispatched, so the save is written now, while the request is in flight.
+            newerSave = launch(start = CoroutineStart.UNDISPATCHED) {
+                repository.updateUser(FeedUserId.Remote(1), "Ada B", "ada@x.io")
+            }
+        }
+
+        repository.syncPendingChanges()
+        newerSave?.join()
+
+        assertThat(api.calls).containsExactly("PATCH 1 Ada A", "PATCH 1 Ada B")
+        assertThat(userDao.rows.value.getValue(1).name).isEqualTo("Ada B")
+        assertThat(pendingSyncDao.updates.value).isEmpty()
+    }
+
+    @Test
+    fun `an edit a running sync already sent is not sent again`() = runTest {
+        userDao.insertAll(listOf(ada))
+        queueOfflineCreate("Grace")
+        pendingSyncDao.upsertUpdatePendingSync(UpdateUserPendingSyncEntity(1, "Ada A", "ada@x.io", updatedAt = 5))
+        var newerSave: Job? = null
+        // While the sync is busy with the create, the queued edit is replaced by a newer one.
+        api.duringRequest = {
+            api.duringRequest = {}
+            // Undispatched, so the save is written now, while the request is in flight.
+            newerSave = launch(start = CoroutineStart.UNDISPATCHED) {
+                repository.updateUser(FeedUserId.Remote(1), "Ada B", "ada@x.io")
+            }
+        }
+
+        repository.syncPendingChanges()
+        newerSave?.join()
+
+        assertThat(api.calls).containsExactly("POST Grace", "PATCH 1 Ada B")
+        assertThat(pendingSyncDao.updates.value).isEmpty()
     }
 
     @Test
@@ -401,6 +602,17 @@ class OfflineFirstUserFeedRepositoryTest {
         assertThat(userDao.rows.value).isEmpty()
         assertThat(api.calls).containsExactly("DELETE 1")
         assertThat(pendingSyncDao.deletes.value).isEmpty()
+    }
+
+    @Test
+    fun `a delete is queued before it is sent so it survives the app dying mid-request`() = runTest {
+        userDao.insertAll(listOf(ada))
+        var queuedDuringDelete: List<DeleteUserPendingSyncEntity>? = null
+        api.duringRequest = { queuedDuringDelete = pendingSyncDao.deletes.value.values.toList() }
+
+        repository.deleteUser(FeedUserId.Remote(1))
+
+        assertThat(queuedDuringDelete).isEqualTo(listOf(DeleteUserPendingSyncEntity(1)))
     }
 
     @Test
@@ -517,7 +729,8 @@ class OfflineFirstUserFeedRepositoryTest {
 
         assertThat(result).isEqualTo(Result.Error(DataError.Network.SERVER_ERROR))
         assertThat(api.calls).containsExactly("POST Grace", "PATCH 1 Ada L", "DELETE 2")
-        assertThat(pendingSyncDao.creates.value.values.toList()).containsExactly(CreateUserPendingSyncEntity(1))
+        assertThat(pendingSyncDao.creates.value.values.toList())
+            .containsExactly(CreateUserPendingSyncEntity(1, wasSent = true))
         assertThat(createdUserDao.rows.value.getValue(1).remoteId).isEqualTo(null)
         assertThat(pendingSyncDao.updates.value.keys.toList()).containsExactly(1L)
         assertThat(pendingSyncDao.deletes.value).isEmpty()
@@ -595,13 +808,57 @@ class OfflineFirstUserFeedRepositoryTest {
     }
 
     @Test
+    fun `a resent create refused for its email adopts the user its lost 201 created`() = runTest {
+        queueOfflineCreate("Grace")
+        api.createResult = Result.Error(DataError.Network.UNPROCESSABLE_ENTITY)
+        api.findResult = Result.Success(UserDto(100, "Grace", "grace@x.io"))
+
+        val result = repository.syncPendingChanges()
+
+        assertThat(result).isEqualTo(Result.Success(Unit))
+        assertThat(api.calls).containsExactly("POST Grace", "GET email grace@x.io")
+        assertThat(createdUserDao.rows.value.getValue(1).remoteId).isEqualTo(100L)
+        assertThat(pendingSyncDao.creates.value).isEmpty()
+        assertThat(rejectedCreationDao.rows.value).isEmpty()
+    }
+
+    @Test
+    fun `a resent create refused because someone else has the email is rejected`() = runTest {
+        queueOfflineCreate("Grace")
+        api.createResult = Result.Error(DataError.Network.UNPROCESSABLE_ENTITY)
+        api.findResult = Result.Success(UserDto(55, "Someone Else", "grace@x.io"))
+
+        val result = repository.syncPendingChanges()
+
+        assertThat(result).isEqualTo(Result.Error(DataError.Network.UNPROCESSABLE_ENTITY))
+        assertThat(createdUserDao.rows.value).isEmpty()
+        assertThat(repository.observeRejectedCreations().first())
+            .containsExactly(RejectedCreation(id = 1, name = "Grace", email = "grace@x.io"))
+    }
+
+    @Test
+    fun `a resent create stays queued when the lookup fails`() = runTest {
+        queueOfflineCreate("Grace")
+        api.createResult = Result.Error(DataError.Network.UNPROCESSABLE_ENTITY)
+        api.findResult = Result.Error(DataError.Network.NO_INTERNET)
+
+        val result = repository.syncPendingChanges()
+
+        assertThat(result).isEqualTo(Result.Error(DataError.Network.NO_INTERNET))
+        assertThat(createdUserDao.rows.value.getValue(1).remoteId).isEqualTo(null)
+        assertThat(pendingSyncDao.creates.value.values.toList())
+            .containsExactly(CreateUserPendingSyncEntity(1, wasSent = true))
+        assertThat(rejectedCreationDao.rows.value).isEmpty()
+    }
+
+    @Test
     fun `a pending create rejected by GoRest is removed with its user and recorded`() = runTest {
         queueOfflineCreate("Grace")
         api.createResult = Result.Error(DataError.Network.UNPROCESSABLE_ENTITY)
 
         val result = repository.syncPendingChanges()
 
-        assertThat(result).isEqualTo(Result.Success(Unit))
+        assertThat(result).isEqualTo(Result.Error(DataError.Network.UNPROCESSABLE_ENTITY))
         assertThat(createdUserDao.rows.value).isEmpty()
         assertThat(pendingSyncDao.creates.value).isEmpty()
         assertThat(repository.observeRejectedCreations().first())

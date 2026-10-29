@@ -4,6 +4,7 @@ plugins {
 
 dependencies {
     implementation(projects.composeApp)
+    implementation(projects.core.domain)
     implementation(projects.core.presentation)
     implementation(projects.userfeed.data)
     implementation(libs.koin.android)

@@ -1,5 +1,8 @@
 package com.androidlearning.sliide_challenge.di
 
+import com.androidlearning.sliide_challenge.core.data.di.coreDataModule
+import com.androidlearning.sliide_challenge.core.database.di.coreDatabaseModule
+import com.androidlearning.sliide_challenge.core.presentation.di.corePresentationModule
 import com.androidlearning.sliide_challenge.userfeed.data.di.userFeedDataModule
 import com.androidlearning.sliide_challenge.userfeed.presentation.di.userFeedPresentationModule
 import org.koin.core.context.startKoin
@@ -9,9 +12,13 @@ fun initKoin(config: KoinAppDeclaration? = null) {
     startKoin {
         config?.invoke(this)
         modules(
-            appModule(),
-            userFeedDataModule(),
-            userFeedPresentationModule(),
+            // core
+            coreDatabaseModule,
+            coreDataModule,
+            corePresentationModule,
+            // features
+            userFeedDataModule,
+            userFeedPresentationModule,
         )
     }
 }

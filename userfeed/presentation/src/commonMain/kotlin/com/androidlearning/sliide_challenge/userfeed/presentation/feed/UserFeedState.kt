@@ -6,6 +6,8 @@ data class UserFeedState(
     /** True until the database's first emission, so the empty state doesn't flash on open. */
     val isLoading: Boolean = true,
     val users: List<FeedUserUi> = emptyList(),
+    /** True while a pull-to-refresh fetches the last GoRest page; the cached users stay on screen under the spinner. */
+    val isRefreshing: Boolean = false,
     /** What tapping a row does, picked from the app bar's overflow menu. */
     val mode: FeedMode = FeedMode.Browse,
     /** Users ticked in [FeedMode.Delete]; always a subset of [users]. */

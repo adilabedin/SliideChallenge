@@ -39,9 +39,10 @@ This is a Kotlin Multiplatform project targeting Android, iOS.
 - **Contracts:** `User` and `MainRepository` live in `:core:domain`; `UserDto` (`@Serializable`), the `toDomain()`
   mapper, `MainApi`, `KtorMainApi` and `OfflineFirstMainRepository` live in `:core:data`, so serialization types never leak
   into domain or presentation.
-- **Last page:** `KtorMainApi.getLastPageUsers()` fetches page 1 to read the `x-pagination-pages` header, then requests
-  that page (both with `per_page=20`). `HttpClient.getWithHeaders` is the header-preserving variant of `get`; it goes
-  through the same `safeCall` status/exception mapping. See *Assumptions & trade-offs* for why it works this way.
+- **Last page:** `KtorMainApi.getLastPageUsers()` requests the page it believes is last (page 1 on a cold start) and
+  checks that response's `x-pagination-pages` header; if the count differs it follows it (all with `per_page=20`).
+  `HttpClient.get` returns the body together with the response headers (`NetworkResponse`), through the same
+  `safeCall` status/exception mapping. See *Assumptions & trade-offs* for why it works this way.
 - **Offline-first:** Room is the single source of truth. `OfflineFirstMainRepository.loadUsers()` fetches the last
   page and swaps it into the table with `UserDao.replaceAll()` (one transaction), so the table always holds exactly that
   page and needs no local pagination. `observeUsers()` only ever reads the database. A failed fetch leaves the cache
@@ -51,6 +52,17 @@ This is a Kotlin Multiplatform project targeting Android, iOS.
   a single `isLoading: StateFlow<Boolean>` (no state class), set to `false` once startup is done.
 - **Feed:** `UserFeedViewModel` observes `UserFeedRepository.observeUsers()` and shows the list (name, email and sync
   status), or an empty-data state when there are no users.
+- **Pull to refresh + shimmer:** pulling the feed down calls `UserFeedRepository.refreshUsers()`, which first sends
+  queued changes (`syncPendingChanges()`, failures stay queued) and then `MainRepository.loadUsers()` for the last
+  page. Users created on this device live in `created_users`, which the refresh never touches, so they stay at the top.
+  During the first database read the list is replaced by shimmering placeholder rows (20 of them, one GoRest page;
+  `Modifier.shimmer()` / `ShimmerBlock` in `:core:designsystem`, themed for dark mode). A refresh keeps the cached
+  users on screen under the Material spinner (`PullToRefreshBox(isRefreshing = state.isRefreshing)`), so the fetched
+  page animates in row by row (`animateItem()`) instead of the whole list being torn down and rebuilt. The list slides
+  down with the finger (`graphicsLayer` translation from `PullToRefreshState.distanceFraction`), holds the gap while
+  refreshing and springs back afterwards. A failed refresh keeps the cached users and
+  shows a snackbar ("No internet connection. Showing saved users."). The empty state is a one-item `LazyColumn`, so it
+  can be pulled too, e.g. after an offline first launch.
 - **Relative timestamp = last sync.** Each row reads "Synced 5 minutes ago", or "Not synced" while it has a create or
   edit waiting in the pending-sync queue. `users.lastSyncedAt` is stamped by a refresh and by a successful PATCH;
   `created_users.lastSyncedAt` by the 201 and by a successful PATCH. `FeedUser.lastSyncedAt` is null whenever a change
@@ -65,15 +77,26 @@ This is a Kotlin Multiplatform project targeting Android, iOS.
 - **`FeedUserId` is sealed (`Created(localId)` / `Remote(id)`).** Local row ids and GoRest ids are separate sequences
   and can collide, and the repository needs to know which table a row lives in. The list flattens it to a string key
   (`created-1`, `remote-1`) because lazy-list keys must be saveable on Android.
-- **Local first, then the network.** Every change is written to Room before its request, so the feed (a `combine` of
-  the created, cached and pending-sync tables) updates immediately. A create is always stored in `CreatedUsersTable`;
-  on 201 its `remoteId` is recorded. If a request fails, the change stays local and is queued in the matching
-  pending-sync table, and the error is returned so the UI can say it hasn't reached the server yet.
+- **Queue first, then the network (an outbox).** Every change is written to Room *together with* its pending-sync entry,
+  in one transaction (`DatabaseTransactionRunner`, backed by Room's `useWriterConnection` + `immediateTransaction`),
+  before any request. So the feed (a `combine` of the created, cached and pending-sync tables) updates immediately, and
+  a change can't be lost if the app dies mid-request: it is already queued, and the next sync sends it. The request
+  then sends that queued entry, and the entry is removed only on success. On failure it simply stays queued, and the
+  error is returned so the UI can say the change hasn't reached the server yet. An earlier version queued a change only
+  *after* its request failed, so a process death mid-request left an unsynced create stranded, an edit silently
+  overwritten by the next refresh, or a deleted user brought back.
+- **Saves outlive the screen.** The repository runs each change in the injected `ApplicationScope` and awaits it, so a
+  save the user confirmed finishes even if the form or details screen closes meanwhile. This replaces the
+  `withContext(NonCancellable)` the ViewModels used to wrap saves in: the guarantee now lives in one place, and
+  `NonCancellable` is kept for cleanup only (the `kotlin-coroutines` skill).
 - **Unsynced creates never hit the network again.** Editing one updates its row (the pending create carries the
   edit); deleting one removes the row and its pending create. Once a created user has a `remoteId`, edits and deletes
   go to the server like any other user.
-- **Queued edits never go stale.** A successful PATCH drops any older queued edit for that user, and deleting a user
-  drops its queued edit whether or not the DELETE succeeds.
+- **Requests go one at a time, so an older edit can never win.** Saves and syncs share one `Mutex`. Each send re-reads
+  its queue entry, so it always sends the latest edit and skips anything a sync already sent. Previously an inline
+  PATCH could race a sync's PATCH of an older edit, and if the older one landed last it won on GoRest *and* locally.
+  Queuing an edit replaces any older one for that user, and deleting a user drops its queued edit in the same
+  transaction that queues the delete.
 
 ### Add / edit user form (`UserFormScreen`)
 
@@ -100,9 +123,9 @@ This is a Kotlin Multiplatform project targeting Android, iOS.
   pops, the new user is already at the top of the feed. The feed scrolls to the top when a created user appears, because
   a keyed lazy list would otherwise keep the old first row in view. Any failure other than 422 has already been queued
   for sync, so the form closes the same way and the row reads "Not synced".
-- **A save can't be cut in half.** The repository writes locally, POSTs, then queues the change on failure. Cancelling
-  between those steps would leave a local user that never syncs. So the ViewModel runs the save in
-  `withContext(NonCancellable)`, and the close button is disabled while it runs.
+- **A save can't be cut in half.** The change and its queue entry are written in one transaction, and the repository
+  runs the save in the application scope, so closing the form mid-save neither loses it nor stops it. The close button
+  is still disabled while it runs, so the user sees the outcome.
 - **The form keeps its fields across process death** by storing name and email in `SavedStateHandle`. A restored
   edit form keeps the user's typing instead of re-prefilling.
 
@@ -149,7 +172,7 @@ This is a Kotlin Multiplatform project targeting Android, iOS.
 - **The sync logic is shared; only scheduling is per platform.** `UserFeedRepository.syncPendingChanges()` and
   `PendingSyncScheduling` live in common code and are unit-tested on both targets. `UserSyncScheduler` is a domain
   interface with a WorkManager implementation (Android) and a `BGTaskScheduler` one (iOS), each wired by a
-  platform-specific `userFeedSyncModule()`.
+  platform-specific `userFeedSyncModule`.
 - **iOS: background app refresh plus a sync whenever the app becomes active.** `BackgroundTaskUserSyncScheduler`
   books a `BGAppRefreshTaskRequest` for no earlier than 30 minutes ahead. iOS decides when it actually runs (based on
   battery and how often the app is used), never runs it after the user force-quits the app, and simulators don't run
@@ -159,7 +182,8 @@ This is a Kotlin Multiplatform project targeting Android, iOS.
   Koin (`MainViewController` no longer does). The identifier is listed in `Info.plist`
   (`BGTaskSchedulerPermittedIdentifiers`, `UIBackgroundModes: fetch`).
 - **Syncs never overlap.** A foreground and a background sync can run at the same time on iOS, so
-  `syncPendingChanges()` holds a `Mutex`; otherwise both would send the same queued changes.
+  `syncPendingChanges()` holds a `Mutex`, which a save's own request also takes; otherwise two of them could send the
+  same queued change. Each step re-reads its entry before sending, since another send may have handled it.
 - **Order: creates, then edits, then deletes.** Each item is sent on its own, so one failure doesn't block the rest.
   A user created offline and then edited or deleted while its POST was in flight gets that edit or delete queued
   straight after the 201, and it is sent in the same run.
@@ -179,31 +203,57 @@ This is a Kotlin Multiplatform project targeting Android, iOS.
   and IO dispatcher. Only obtaining the builder is platform-specific (Android needs a `Context` for the file path; iOS
   uses the Documents directory).
 - `UserDao` is tested against a real in-memory Room database on the iOS simulator target (no Android `Context` needed).
+- `DatabaseTransactionRunner` / `RoomTransactionRunner` run DAO calls from several DAOs as one transaction. A test on
+  the real database throws midway and checks that neither write survived, which proves the DAO calls join it.
 
 ### Dependency injection
 
-- **Core is wired in the app.** `appModule()` in `:composeApp` registers the `HttpClient`, `SliideDatabase`, `UserDao`,
-  API, repository and `MainViewModel` (which lives in `:core:presentation`). Core is fixed and `:composeApp` already
-  depends on every core module, so per-layer core modules would add files without adding isolation. Two bindings could
-  only live in the app anyway: the `HttpClient` needs `BuildKonfig.API_KEY`, and the Android database builder needs the
-  app `Context`.
-- **Features own their module.** `userFeedDataModule()` and `userFeedPresentationModule()` live in `:userfeed:data` and
-  `:userfeed:presentation`, so a feature can be
-  added or removed without the app knowing its internals. `initKoin` only lists modules.
-- Core data and database modules stay free of Koin.
+- **One Koin module per layer, assembled only in the app** (the `android-di-koin` skill). Each core module owns its
+  bindings: `coreDatabaseModule` (database and DAOs), `coreDataModule` (`HttpClient`, `Clock`, `MainApi`,
+  `MainRepository`) and `corePresentationModule` (`MainViewModel`). Features do the same with `userFeedDataModule` and
+  `userFeedPresentationModule`. `initKoin` in `:composeApp` only lists them, so adding a DAO or a feature never touches
+  the app's wiring.
+- **Platform differences stay inside the owning module.** Android's database builder needs the Koin-provided `Context`,
+  so `:core:database` includes an `expect`/`actual` `platformDatabaseModule`. The API key is generated by BuildKonfig
+  in `:core:data`, next to the `HttpClient` that uses it. The platform-specific `userFeedSyncModule` is added by each
+  app entry point (`SliideApplication`, `startIosApp`).
+- **One application scope.** `ApplicationScope` (`:core:domain`, a typed `CoroutineScope`, so it needs no qualifier) is
+  bound once in `coreDataModule`. The repository and `UserFeedViewModel` use it for work that must outlive a screen, and
+  both app entry points start the sync observers in it instead of creating their own scopes.
+- **Constructor references by default** (`singleOf`, `viewModelOf`). `Clock.System` is bound once, so classes that take
+  a `Clock` can use them too; tests still pass a fake clock directly. The lambda form is kept only where route
+  arguments arrive through `parametersOf`.
+
+### Strings and localisation
+
+- **All UI copy lives in the owning presentation module's Compose Multiplatform resources**
+  (`userfeed/presentation/src/commonMain/composeResources/values/strings.xml`, generated `Res` in
+  `…userfeed.presentation.resources`), so Android and iOS share one translatable file. Counts use `<plurals>`, and full
+  phrases ("Synced %1$d minutes ago") are used rather than fragments joined in code, so translators can reorder words.
+- **ViewModel state holds data, not text.** `FeedUserUi.syncStatus` is a `SyncStatus`/`TimeAgo` value (e.g.
+  `Synced(Minutes(5))`), which a composable turns into words. Unit tests assert the exact value, including the
+  rounding and unit-boundary cases, without depending on resource loading.
+- **Snackbars that outlive their screen** ("User added" after the form closes) are passed as a `StringResource` to
+  `SnackbarController.show`, which loads the string on the controller's own scope. Loading it on the form's scope
+  would be cancelled when the form leaves, and the message would never show.
 
 ## Assumptions & trade-offs
 
-- **"Last page" means the final page of `/users`.** Confirmed with Sliide. GoRest lists users newest first, so the last
-  page holds the oldest users.
-- **Two requests to find it.** GoRest only reports the page count in the `x-pagination-pages` response header, and its
-  `x-links-*` headers don't include a "last" link. So we fetch page 1, read the count, then fetch that page. A single
-  request isn't possible without guessing.
-- **`per_page=20`, sent on both requests.** The page count depends on the page size, so both calls must agree. GoRest
+- **"Last page" means the final page of `/users`.** Confirmed wit- **Usually one request, two on a cold start.** GoRest gives no direct way to the last page. We checked the live API:
+  the page count only comes in the `x-pagination-pages` header, the `x-links-*` headers have no "last" link, `sort`/
+  `order` are ignored (always newest first), `page=-1`/`page=last` fall back to page 1, `HEAD` returns 404, and the
+  GraphQL endpoint and v1 API (which had pagination in the body) are gone. But *every* page response carries the
+  count, so we remember the last page in memory and request it directly next time: if its header agrees, that's the
+  answer in one request. On a cold start the guess is page 1, so it costs two. We don't persist the hint: a cold start
+  pays one extra request, and saving it would add storage for little gain.
+- **`per_page=20` on every request.** The page count depends on the page size, so all calls must agree. GoRest
   accepts up to 100 and silently falls back to 10 above that. The trade-off: the last page holds `total % 20` users
   (anywhere from 1 to 20), so the feed can be short. We accept that because it's what "last page" literally means.
-- **The dataset can change between the two requests.** GoRest is shared and constantly written to. If it shrinks, the
-  requested page returns `[]` with the new count in the header; we retry that page once. A missing or unreadable count
+- **The dataset can change between requests.** GoRest is shared and constantly written to. If our page is no longer
+  last (it grew), or is now past the end (it shrank, returning `[]`), the header reports the new count and we follow
+  it. That's capped at three requests per refresh; if the count is still moving we report an error and keep showing
+  the cache. A missing or unreadable count is reported as an error rather than guessing a page.
+ A missing or unreadable count
   is reported as an error rather than guessing a page.
 - **Created users are local only.** Confirmed with Sliide: other devices don't need to see them. A user created
   from the app (201) is stored in Room and shown at the top immediately; GoRest ids increase, and the feed sorts by
@@ -229,8 +279,24 @@ This is a Kotlin Multiplatform project targeting Android, iOS.
     `dismissRejectedCreation()`. The record is persisted because the rejection can arrive from a background sync
     while the app is closed. When the 422 comes back to the add-user form, the form shows "This email is already
     taken" inline and stays open, so the user can fix it in place. It then dismisses the rejection record it just
-    caused, so the feed won't report it a second time.
-  - A 422 on a queued edit is still retried every 30 minutes until the user edits or deletes that user again.
+    caused, so the feed won't report it a second time. If the form was closed before the 422 arrived, the record
+    stays and the feed reports it.
+  - A 422 on a queued edit is still retried every 30 minutes until the user edits or deletes that user again. Known
+    gap: the row reads "Not synced" all that time with no explanation. Surfacing it like a rejected create would be the
+    next step; the change itself is never dropped.
+- **A lost 201 is recovered, not reported as a rejection.** POST isn't idempotent. If GoRest creates the user but
+  the 201 never arrives (a timeout, or the app dying mid-request), the create stays queued and its resend is refused
+  (422) because the email is now taken. Each pending create therefore records `wasSent` just before its POST. A 422
+  on a resend looks the email up (`GET users?email=`; GoRest matches partially, so the exact email is picked) and
+  adopts that user's id if the **name matches too**. Otherwise someone else holds the email and it is a genuine
+  rejection. If the lookup fails, the create stays queued. A 422 on the *first* POST is never looked up, so the form's
+  "email already taken" is unchanged. Gaps we accept: if the user edits the email of a create whose 201 was lost, the
+  resend succeeds and GoRest ends up with a stray duplicate; if they edit its name, the lookup sees a different name and
+  reports a rejection.
+- **GoRest wipes data, so created users can outlive their server copy.** Created users are local-only (above), so a
+  user GoRest has since deleted stays in the feed. Editing it gets a 404, which drops the queued edit as "already gone",
+  but the row keeps the edited text and its old "Synced … ago" time, so it looks synced when it isn't. Deleting it works
+  (a 404 counts as deleted).
 - **iOS sync timing is best-effort.** iOS can't guarantee a 30-minute cadence, which is why the app also syncs
   whenever it becomes active.
 - **Schema stays at version 1 during development.** The app isn't released, so schema changes edit version 1 in
@@ -263,8 +329,19 @@ This is a Kotlin Multiplatform project targeting Android, iOS.
   immediately. Trade-offs:
   - The 204 arrives after the undo window, not before the row disappears. The offline-first feed never waited for the
     network to update the UI anyway.
-  - If the app is killed or the feed is closed during those 5 seconds, the delete is never sent and the user is still
-    there next time. We accept that: losing a delete is recoverable, whereas a delete that can't be undone is not.
+  - Closing the feed during those 5 seconds takes the Undo snackbar with it, so `onCleared()` sends the delete then,
+    in the application scope (`viewModelScope` is already cancelled by that point). Previously the timer was cancelled
+    with the ViewModel and the delete was silently lost.
+  - If the process is killed during those 5 seconds, `onCleared()` never runs and the user is still there next time.
+    We accept that: losing a delete is recoverable, whereas a delete that can't be undone is not. Persisting the
+    pending delete with an "undo until" time would close this gap.
+- **One snackbar host, above the navigation.** `SnackbarControllerHost` (`:core:presentation`) wraps the `NavHost`
+  and provides a `SnackbarController` through `LocalSnackbarController`. A message therefore outlives the screen that
+  sent it: the form says "User added", "Changes saved" or "This user no longer exists" as it closes. One-off messages
+  (`show`) wait their turn. Undo uses `showNow`, which takes down whatever is showing, because its 5-second timer is
+  already running and waiting behind a refresh error would leave almost no time to tap it. Because the host isn't the
+  feed's own `Scaffold`, the Scaffold can't lift the FAB above the snackbar by itself, so the controller exposes
+  the snackbar's `visibleHeight` and the feed pads its FAB by that amount.
 
 ### Running the apps
 

@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "database": {
     "version": 1,
-    "identityHash": "cacef0e9b5e8aa8548f40d7b568d75ee",
+    "identityHash": "da7e491fa8af9b98dd64ed32c05454ba",
     "entities": [
       {
         "tableName": "UsersTable",
@@ -88,11 +88,17 @@
       },
       {
         "tableName": "CreateUserPendingSyncsTable",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`localId` INTEGER NOT NULL, PRIMARY KEY(`localId`))",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`localId` INTEGER NOT NULL, `wasSent` INTEGER NOT NULL, PRIMARY KEY(`localId`))",
         "fields": [
           {
             "fieldPath": "localId",
             "columnName": "localId",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "wasSent",
+            "columnName": "wasSent",
             "affinity": "INTEGER",
             "notNull": true
           }
@@ -191,7 +197,7 @@
     ],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'cacef0e9b5e8aa8548f40d7b568d75ee')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'da7e491fa8af9b98dd64ed32c05454ba')"
     ]
   }
 }

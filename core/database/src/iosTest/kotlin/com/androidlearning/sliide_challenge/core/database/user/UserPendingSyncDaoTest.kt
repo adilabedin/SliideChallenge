@@ -5,7 +5,9 @@ import assertk.assertThat
 import assertk.assertions.containsExactly
 import assertk.assertions.containsExactlyInAnyOrder
 import assertk.assertions.isEmpty
+import assertk.assertions.isEqualTo
 import assertk.assertions.isFalse
+import assertk.assertions.isNull
 import assertk.assertions.isTrue
 import com.androidlearning.sliide_challenge.core.database.DatabaseFactory
 import com.androidlearning.sliide_challenge.core.database.SliideDatabase
@@ -47,6 +49,38 @@ class UserPendingSyncDaoTest {
         dao.deleteCreatePendingSync(localId = 1)
 
         assertThat(dao.getCreatePendingSyncs()).containsExactly(CreateUserPendingSyncEntity(localId = 2))
+    }
+
+    @Test
+    fun createPendingSync_markSent_setsFlagOnThatEntryOnly() = runTest {
+        dao.upsertCreatePendingSync(CreateUserPendingSyncEntity(localId = 1))
+        dao.upsertCreatePendingSync(CreateUserPendingSyncEntity(localId = 2))
+
+        dao.markCreatePendingSyncSent(localId = 1)
+
+        assertThat(dao.getCreatePendingSync(localId = 1)).isEqualTo(CreateUserPendingSyncEntity(1, wasSent = true))
+        assertThat(dao.getCreatePendingSync(localId = 2)).isEqualTo(CreateUserPendingSyncEntity(2, wasSent = false))
+    }
+
+    @Test
+    fun createPendingSync_markSentAfterDelete_doesNotBringItBack() = runTest {
+        dao.upsertCreatePendingSync(CreateUserPendingSyncEntity(localId = 1))
+        dao.deleteCreatePendingSync(localId = 1)
+
+        dao.markCreatePendingSyncSent(localId = 1)
+
+        assertThat(dao.getCreatePendingSync(localId = 1)).isNull()
+    }
+
+    @Test
+    fun getSinglePendingSync_returnsThatEntryOrNull() = runTest {
+        dao.upsertUpdatePendingSync(update(userId = 7))
+        dao.upsertDeletePendingSync(DeleteUserPendingSyncEntity(userId = 8))
+
+        assertThat(dao.getUpdatePendingSync(userId = 7)).isEqualTo(update(userId = 7))
+        assertThat(dao.getUpdatePendingSync(userId = 8)).isNull()
+        assertThat(dao.getDeletePendingSync(userId = 8)).isEqualTo(DeleteUserPendingSyncEntity(userId = 8))
+        assertThat(dao.getDeletePendingSync(userId = 7)).isNull()
     }
 
     @Test

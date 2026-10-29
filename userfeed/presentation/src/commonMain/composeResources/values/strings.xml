@@ -1,0 +1,95 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Feed -->
+    <string name="feed_title">Users</string>
+    <string name="feed_title_edit_mode">Tap a user to edit</string>
+    <string name="feed_title_select_users">Select users</string>
+    <string name="feed_title_selected_count">%1$d selected</string>
+    <string name="feed_add_user">Add user</string>
+    <string name="feed_loading_users">Loading users</string>
+    <string name="feed_empty_title">No users yet</string>
+    <string name="feed_empty_message">Pull down to refresh, or add a user.</string>
+    <string name="feed_no_user_opened_title">No user to show</string>
+    <string name="feed_no_user_opened_message">Add a user and their details will appear here.</string>
+    <string name="feed_more_options">More options</string>
+    <string name="feed_delete_selected">Delete selected</string>
+
+    <!-- Row accessibility labels -->
+    <string name="row_action_open">Open</string>
+    <string name="row_action_select">Select</string>
+    <string name="row_action_deselect">Deselect</string>
+
+    <!-- Refresh errors: the cached users stay on screen underneath. -->
+    <string name="refresh_error_no_internet">No internet connection. Showing saved users.</string>
+    <string name="refresh_error_timeout">The server took too long to respond. Try again.</string>
+    <string name="refresh_error_unknown">Couldn't refresh users. Try again.</string>
+
+    <!-- Delete and Undo -->
+    <string name="delete_user_title">Delete %1$s?</string>
+    <string name="delete_user_message">%1$s will be removed from the list. You can undo this for a few seconds.</string>
+    <plurals name="delete_users_title">
+        <item quantity="one">Delete %1$d user?</item>
+        <item quantity="other">Delete %1$d users?</item>
+    </plurals>
+    <string name="delete_users_message">They will be removed from the list. You can undo this for a few seconds.</string>
+    <string name="user_deleted">%1$s deleted</string>
+    <plurals name="users_deleted">
+        <item quantity="one">%1$d user deleted</item>
+        <item quantity="other">%1$d users deleted</item>
+    </plurals>
+    <string name="undo">Undo</string>
+
+    <!-- User details -->
+    <string name="detail_title">User</string>
+    <string name="detail_title_editing">Edit User</string>
+    <string name="detail_cancel_editing">Cancel editing</string>
+    <string name="detail_edit_user">Edit user</string>
+    <string name="detail_sync_status">Sync status</string>
+
+    <!-- Sync status -->
+    <string name="sync_status_not_synced">Not synced</string>
+    <string name="sync_status_synced_just_now">Synced just now</string>
+    <plurals name="sync_status_synced_minutes_ago">
+        <item quantity="one">Synced %1$d minute ago</item>
+        <item quantity="other">Synced %1$d minutes ago</item>
+    </plurals>
+    <plurals name="sync_status_synced_hours_ago">
+        <item quantity="one">Synced %1$d hour ago</item>
+        <item quantity="other">Synced %1$d hours ago</item>
+    </plurals>
+    <plurals name="sync_status_synced_days_ago">
+        <item quantity="one">Synced %1$d day ago</item>
+        <item quantity="other">Synced %1$d days ago</item>
+    </plurals>
+
+    <!-- Form -->
+    <string name="form_title_new">New user</string>
+    <string name="form_title_edit">Edit user</string>
+    <string name="form_submit_create">Create user</string>
+    <string name="form_submit_save">Save changes</string>
+    <string name="form_user_added">User added</string>
+    <string name="form_changes_saved">Changes saved</string>
+    <string name="form_user_not_found">This user no longer exists</string>
+    <string name="form_email_taken">This email is already taken</string>
+
+    <!-- Fields and validation -->
+    <string name="field_name">Name</string>
+    <string name="field_email">Email</string>
+    <string name="field_valid">Valid</string>
+    <string name="name_error_empty">Enter a name</string>
+    <string name="name_error_too_short">Name must be at least %1$d characters</string>
+    <string name="name_error_too_long">Name must be at most %1$d characters</string>
+    <string name="name_error_invalid_characters">Use letters, spaces, hyphens, apostrophes or full stops</string>
+    <string name="email_error_empty">Enter an email address</string>
+    <string name="email_error_too_long">Email must be at most %1$d characters</string>
+    <string name="email_error_invalid_format">Enter a valid email, e.g. name@example.com</string>
+
+    <!-- Shared actions -->
+    <string name="action_edit">Edit</string>
+    <string name="action_delete">Delete</string>
+    <string name="action_delete_user">Delete user</string>
+    <string name="action_cancel">Cancel</string>
+    <string name="action_close">Close</string>
+    <string name="action_back">Back</string>
+    <string name="action_save">Save</string>
+</resources>

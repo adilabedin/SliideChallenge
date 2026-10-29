@@ -26,7 +26,16 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.androidlearning.sliide_challenge.userfeed.presentation.resources.Res
+import com.androidlearning.sliide_challenge.userfeed.presentation.resources.action_cancel
+import com.androidlearning.sliide_challenge.userfeed.presentation.resources.action_delete
+import com.androidlearning.sliide_challenge.userfeed.presentation.resources.delete_user_message
+import com.androidlearning.sliide_challenge.userfeed.presentation.resources.delete_user_title
+import com.androidlearning.sliide_challenge.userfeed.presentation.resources.delete_users_message
+import com.androidlearning.sliide_challenge.userfeed.presentation.resources.delete_users_title
 import kotlinx.coroutines.launch
+import org.jetbrains.compose.resources.pluralStringResource
+import org.jetbrains.compose.resources.stringResource
 
 /**
  * Asks to confirm deleting one user. Show it while the caller's state says a delete is awaiting confirmation; either
@@ -41,8 +50,8 @@ fun DeleteUserSheet(
     modifier: Modifier = Modifier,
 ) {
     DeleteConfirmationSheet(
-        title = "Delete $name?",
-        message = "$email will be removed from the list. You can undo this for a few seconds.",
+        title = stringResource(Res.string.delete_user_title, name),
+        message = stringResource(Res.string.delete_user_message, email),
         onConfirm = onConfirm,
         onDismiss = onDismiss,
         modifier = modifier,
@@ -58,8 +67,8 @@ fun DeleteUsersSheet(
     modifier: Modifier = Modifier,
 ) {
     DeleteConfirmationSheet(
-        title = "Delete $count users?",
-        message = "They will be removed from the list. You can undo this for a few seconds.",
+        title = pluralStringResource(Res.plurals.delete_users_title, count, count),
+        message = stringResource(Res.string.delete_users_message),
         onConfirm = onConfirm,
         onDismiss = onDismiss,
         modifier = modifier,
@@ -120,7 +129,7 @@ private fun DeleteConfirmationSheet(
                     onClick = { hideThen(onDismiss) },
                     modifier = Modifier.weight(1f),
                 ) {
-                    Text("Cancel")
+                    Text(stringResource(Res.string.action_cancel))
                 }
                 Button(
                     onClick = { hideThen(onConfirm) },
@@ -130,7 +139,7 @@ private fun DeleteConfirmationSheet(
                         contentColor = MaterialTheme.colorScheme.onError,
                     ),
                 ) {
-                    Text("Delete")
+                    Text(stringResource(Res.string.action_delete))
                 }
             }
         }

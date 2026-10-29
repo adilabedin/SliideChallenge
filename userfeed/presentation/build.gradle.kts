@@ -10,3 +10,7 @@ kotlin {
         }
     }
 }
+
+compose.resources {
+    packageOfResClass = "com.androidlearning.sliide_challenge.userfeed.presentation.resources"
+}

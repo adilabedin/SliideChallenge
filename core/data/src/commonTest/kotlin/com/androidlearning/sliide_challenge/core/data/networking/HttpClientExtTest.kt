@@ -44,14 +44,21 @@ class HttpClientExtTest {
         respond(body, status, headersOf(HttpHeaders.ContentType, "application/json"))
 
     @Test
-    fun `get success decodes body and sends query params and auth header`() = runTest {
-        val client = client { json("""[{"id":1,"name":"Ada"}]""") }
+    fun `get success decodes body with headers and sends query params and auth header`() = runTest {
+        val client = client {
+            respond(
+                """[{"id":1,"name":"Ada"}]""",
+                HttpStatusCode.OK,
+                headersOf(HttpHeaders.ContentType to listOf("application/json"), "x-pagination-pages" to listOf("7")),
+            )
+        }
 
         val result = client.get<JsonArray>(route = "/users", queryParameters = mapOf("page" to 3))
 
-        assertThat(result).isInstanceOf<Result.Success<JsonArray>>()
-        val users = (result as Result.Success).data
-        assertThat(users.size).isEqualTo(1)
+        assertThat(result).isInstanceOf<Result.Success<NetworkResponse<JsonArray>>>()
+        val response = (result as Result.Success).data
+        assertThat(response.body.size).isEqualTo(1)
+        assertThat(response.headers["x-pagination-pages"]).isEqualTo("7")
         val request = lastRequest!!
         assertThat(request.method).isEqualTo(HttpMethod.Get)
         assertThat(request.url.toString()).isEqualTo("https://gorest.co.in/public/v2/users?page=3")

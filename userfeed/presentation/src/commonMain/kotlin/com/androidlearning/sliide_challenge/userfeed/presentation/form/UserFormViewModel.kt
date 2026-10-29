@@ -8,7 +8,6 @@ import com.androidlearning.sliide_challenge.core.domain.util.EmptyResult
 import com.androidlearning.sliide_challenge.core.domain.util.Result
 import com.androidlearning.sliide_challenge.userfeed.domain.UserFeedRepository
 import com.androidlearning.sliide_challenge.userfeed.domain.UserValidator
-import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -16,7 +15,6 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 
 /**
  * Validates as the user types and saves through [UserFeedRepository], which writes to the database before calling
@@ -99,9 +97,8 @@ class UserFormViewModel(
         val email = UserValidator.normalizeEmail(current.email)
         _state.update { it.copy(isSaving = true) }
         viewModelScope.launch {
-            // The repository writes locally, calls GoRest, then queues the change if the call failed. Cancelling
-            // between those steps (the form being closed) would leave a local change that never syncs.
-            val result = withContext(NonCancellable) { save(name, email) }
+            // The repository finishes the save even if the form is closed meanwhile.
+            val result = save(name, email)
             if (result is Result.Error && result.error == DataError.Network.UNPROCESSABLE_ENTITY &&
                 mode is UserFormMode.Create
             ) {

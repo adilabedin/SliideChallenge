@@ -14,6 +14,8 @@ import com.androidlearning.sliide_challenge.userfeed.domain.EmailValidationError
 import com.androidlearning.sliide_challenge.userfeed.domain.FeedUser
 import com.androidlearning.sliide_challenge.userfeed.domain.FeedUserId
 import com.androidlearning.sliide_challenge.userfeed.presentation.FakeUserFeedRepository
+import com.androidlearning.sliide_challenge.userfeed.presentation.feed.SyncStatus
+import com.androidlearning.sliide_challenge.userfeed.presentation.feed.TimeAgo
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -63,12 +65,12 @@ class UserDetailViewModelTest {
             assertThat(state.isLoading).isFalse()
             assertThat(state.isEditing).isFalse()
             assertThat(state.user?.name).isEqualTo("Ada Lovelace")
-            assertThat(state.user?.syncStatus).isEqualTo("Not synced")
+            assertThat(state.user?.syncStatus).isEqualTo(SyncStatus.NotSynced)
 
             repository.users.value = listOf(ada.copy(name = "Ada King", lastSyncedAt = clock.now))
             val updated = awaitItem()
             assertThat(updated.user?.name).isEqualTo("Ada King")
-            assertThat(updated.user?.syncStatus).isEqualTo("Synced just now")
+            assertThat(updated.user?.syncStatus).isEqualTo(SyncStatus.Synced(TimeAgo.JustNow))
         }
     }
 

@@ -80,6 +80,27 @@ class KtorUserFeedApiTest {
     }
 
     @Test
+    fun `find by email queries users by email and picks the exact match among partial ones`() = runTest {
+        val body = """[{"id":3,"name":"Ada","email":"ada@x.io.uk"},{"id":7,"name":"Ada","email":"ADA@x.io"}]"""
+
+        val result = api(HttpStatusCode.OK, body).findUserByEmail("ada@x.io")
+
+        assertThat(result).isEqualTo(Result.Success(UserDto(id = 7, name = "Ada", email = "ADA@x.io")))
+        val request = requests.single()
+        assertThat(request.method).isEqualTo(HttpMethod.Get)
+        assertThat(request.url.toString()).isEqualTo("https://gorest.co.in/public/v2/users?email=ada%40x.io")
+    }
+
+    @Test
+    fun `find by email returns null when only partial matches come back`() = runTest {
+        val body = """[{"id":3,"name":"Ada","email":"ada@x.io.uk"}]"""
+
+        val result = api(HttpStatusCode.OK, body).findUserByEmail("ada@x.io")
+
+        assertThat(result).isEqualTo(Result.Success(null))
+    }
+
+    @Test
     fun `delete succeeds on 204 with an empty body`() = runTest {
         val result = api(HttpStatusCode.NoContent).deleteUser(7)
 

@@ -11,9 +11,8 @@ import org.koin.dsl.bind
 import org.koin.dsl.module
 
 /** Background sync on Android (WorkManager); the app loads this alongside [userFeedDataModule]. */
-fun userFeedSyncModule(): Module =
-    module {
-        singleOf(::WorkManagerUserSyncScheduler) bind UserSyncScheduler::class
-        singleOf(::PendingSyncScheduling)
-        workerOf(::UserSyncWorker)
-    }
+val userFeedSyncModule: Module = module {
+    singleOf(::WorkManagerUserSyncScheduler) bind UserSyncScheduler::class
+    singleOf(::PendingSyncScheduling)
+    workerOf(::UserSyncWorker)
+}

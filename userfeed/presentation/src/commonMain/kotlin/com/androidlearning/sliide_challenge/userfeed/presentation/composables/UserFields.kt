@@ -15,6 +15,11 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.androidlearning.sliide_challenge.core.designsystem.theme.SliideTheme
+import com.androidlearning.sliide_challenge.userfeed.domain.EmailValidationError
+import com.androidlearning.sliide_challenge.userfeed.presentation.resources.Res
+import com.androidlearning.sliide_challenge.userfeed.presentation.resources.field_email
+import com.androidlearning.sliide_challenge.userfeed.presentation.resources.field_name
+import org.jetbrains.compose.resources.stringResource
 
 /** The name and email fields used wherever a user is created or edited; the keyboard's Done key calls [onDone]. */
 @Composable
@@ -41,7 +46,7 @@ fun UserFields(
             value = name,
             onValueChange = onNameChange,
             onFocusLost = onNameFocusLost,
-            label = "Name",
+            label = stringResource(Res.string.field_name),
             leadingIcon = Icons.Default.Person,
             errorMessage = nameErrorMessage,
             isValid = isNameValid,
@@ -55,7 +60,7 @@ fun UserFields(
             value = email,
             onValueChange = onEmailChange,
             onFocusLost = onEmailFocusLost,
-            label = "Email",
+            label = stringResource(Res.string.field_email),
             leadingIcon = Icons.Default.Email,
             errorMessage = emailErrorMessage,
             isValid = isEmailValid,
@@ -78,7 +83,7 @@ private fun UserFieldsPreview() {
             name = "Ada Lovelace",
             email = "ada@example",
             nameErrorMessage = null,
-            emailErrorMessage = "Enter a valid email, e.g. name@example.com",
+            emailErrorMessage = EmailValidationError.INVALID_FORMAT.toMessage(),
             isNameValid = true,
             isEmailValid = false,
             enabled = true,

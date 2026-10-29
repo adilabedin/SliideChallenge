@@ -2,10 +2,11 @@ package com.androidlearning.sliide_challenge.userfeed.presentation.feed
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.androidlearning.sliide_challenge.core.domain.util.ApplicationScope
+import com.androidlearning.sliide_challenge.core.domain.util.onFailure
 import com.androidlearning.sliide_challenge.userfeed.domain.FeedUserId
 import com.androidlearning.sliide_challenge.userfeed.domain.UserFeedRepository
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
@@ -19,7 +20,6 @@ import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
@@ -30,10 +30,12 @@ import kotlin.time.Instant
  *
  * A confirmed delete is held back for [UNDO_WINDOW]: the users are only hidden here, and the repository deletes (local
  * row, then GoRest) run once Undo is no longer offered. A delete that has reached GoRest can't be reversed without
- * re-creating the user under a new id, so Undo restores the rows by simply un-hiding them.
+ * re-creating the user under a new id, so Undo restores the rows by simply un-hiding them. Closing the screen ends the
+ * undo window early, so the deletes are sent then.
  */
 class UserFeedViewModel(
     private val userFeedRepository: UserFeedRepository,
+    private val applicationScope: ApplicationScope,
     private val clock: Clock = Clock.System,
 ) : ViewModel() {
 
@@ -81,6 +83,7 @@ class UserFeedViewModel(
 
     fun onAction(action: UserFeedAction) {
         when (action) {
+            UserFeedAction.OnRefresh -> refresh()
             is UserFeedAction.OnUserClick -> onUserClick(action.user)
             is UserFeedAction.OnUserLongClick -> screenState.update {
                 if (it.mode == FeedMode.Browse) it.copy(usersToDelete = listOf(action.user)) else it
@@ -100,6 +103,22 @@ class UserFeedViewModel(
             UserFeedAction.OnDeleteConfirm -> confirmDelete()
             UserFeedAction.OnUndoDeleteClick -> undoDelete()
             is UserFeedAction.OnDeleteRequested -> requestDelete(action.id)
+        }
+    }
+
+    /** The database drives [state], so the fetched page shows up through [UserFeedRepository.observeUsers]. */
+    private fun refresh() {
+        if (screenState.value.isRefreshing) return
+        screenState.update { it.copy(isRefreshing = true) }
+        viewModelScope.launch {
+            val result = try {
+                userFeedRepository.refreshUsers()
+            } finally {
+                // Also on cancellation, so the shimmer never outlives the request.
+                screenState.update { it.copy(isRefreshing = false) }
+            }
+            // After the shimmer goes, since the send waits for the screen to collect it.
+            result.onFailure { error -> _events.send(UserFeedEvent.RefreshFailed(error)) }
         }
     }
 
@@ -166,22 +185,26 @@ class UserFeedViewModel(
         hiddenIds.update { it - users.map(FeedUserUi::id).toSet() }
     }
 
-    /** Sends the deletes still waiting on their Undo, if any. */
+    /**
+     * Sends the deletes still waiting on their Undo, if any. They run in [applicationScope] because the user has
+     * confirmed them: they must go through even if this screen closes before they finish.
+     */
     private fun finishDelete() {
         val users = screenState.value.deletedUsers
         if (users.isEmpty()) return
         undoTimer?.cancel()
         undoTimer = null
         screenState.update { it.copy(deletedUsers = emptyList()) }
-        viewModelScope.launch {
-            // The repository deletes locally, calls GoRest, then queues the delete if the call failed. Cancelling
-            // between those steps would leave a local delete that never syncs.
-            withContext(NonCancellable) {
-                users.forEach { userFeedRepository.deleteUser(it.id) }
-            }
+        applicationScope.launch {
+            users.forEach { userFeedRepository.deleteUser(it.id) }
             // Kept hidden until now, so the rows don't flash back before the database drops them.
             hiddenIds.update { it - users.map(FeedUserUi::id).toSet() }
         }
+    }
+
+    /** The Undo snackbar goes with the screen, so a delete still waiting on it is final now. */
+    override fun onCleared() {
+        finishDelete()
     }
 
     private companion object {

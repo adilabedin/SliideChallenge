@@ -22,20 +22,8 @@ import io.ktor.serialization.ContentConvertException
 import kotlinx.serialization.SerializationException
 import kotlin.coroutines.cancellation.CancellationException
 
+/** Returns the decoded body together with the response headers (GoRest puts pagination there). */
 suspend inline fun <reified Response : Any> HttpClient.get(
-    route: String,
-    queryParameters: Map<String, Any?> = mapOf(),
-): Result<Response, DataError.Network> {
-    return safeCall {
-        get {
-            url(constructRoute(route))
-            queryParameters.forEach { (key, value) -> parameter(key, value) }
-        }
-    }
-}
-
-/** Like [get], but keeps the response headers. Status and exception mapping are unchanged. */
-suspend inline fun <reified Response : Any> HttpClient.getWithHeaders(
     route: String,
     queryParameters: Map<String, Any?> = mapOf(),
 ): Result<NetworkResponse<Response>, DataError.Network> {

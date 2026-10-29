@@ -34,11 +34,23 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.androidlearning.sliide_challenge.core.designsystem.theme.SliideTheme
+import com.androidlearning.sliide_challenge.core.presentation.snackbar.LocalSnackbarController
 import com.androidlearning.sliide_challenge.core.presentation.util.ObserveAsEvents
 import com.androidlearning.sliide_challenge.userfeed.domain.EmailValidationError
 import com.androidlearning.sliide_challenge.userfeed.presentation.composables.UserAvatar
 import com.androidlearning.sliide_challenge.userfeed.presentation.composables.UserFields
 import com.androidlearning.sliide_challenge.userfeed.presentation.composables.toMessage
+import com.androidlearning.sliide_challenge.userfeed.presentation.resources.Res
+import com.androidlearning.sliide_challenge.userfeed.presentation.resources.action_close
+import com.androidlearning.sliide_challenge.userfeed.presentation.resources.form_changes_saved
+import com.androidlearning.sliide_challenge.userfeed.presentation.resources.form_email_taken
+import com.androidlearning.sliide_challenge.userfeed.presentation.resources.form_submit_create
+import com.androidlearning.sliide_challenge.userfeed.presentation.resources.form_submit_save
+import com.androidlearning.sliide_challenge.userfeed.presentation.resources.form_title_edit
+import com.androidlearning.sliide_challenge.userfeed.presentation.resources.form_title_new
+import com.androidlearning.sliide_challenge.userfeed.presentation.resources.form_user_added
+import com.androidlearning.sliide_challenge.userfeed.presentation.resources.form_user_not_found
+import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.viewmodel.koinViewModel
 import org.koin.core.parameter.parametersOf
 
@@ -49,11 +61,16 @@ fun UserFormRoot(
     viewModel: UserFormViewModel = koinViewModel { parametersOf(mode) },
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val snackbarController = LocalSnackbarController.current
 
+    // The snackbar host sits above the navigation, so the message stays up after the form closes.
     ObserveAsEvents(viewModel.events) { event ->
-        when (event) {
-            UserFormEvent.Saved, UserFormEvent.UserNotFound -> onNavigateBack()
+        val message = when (event) {
+            UserFormEvent.Saved -> if (mode is UserFormMode.Create) Res.string.form_user_added else Res.string.form_changes_saved
+            UserFormEvent.UserNotFound -> Res.string.form_user_not_found
         }
+        snackbarController.show(message)
+        onNavigateBack()
     }
 
     UserFormScreen(
@@ -73,11 +90,11 @@ fun UserFormScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(if (state.isEditing) "Edit user" else "New user") },
+                title = { Text(stringResource(if (state.isEditing) Res.string.form_title_edit else Res.string.form_title_new)) },
                 navigationIcon = {
                     // Closing mid-save would hide a "email already taken" reply, so wait for the save to finish.
                     IconButton(onClick = onCloseClick, enabled = !state.isSaving) {
-                        Icon(Icons.Default.Close, contentDescription = "Close")
+                        Icon(Icons.Default.Close, contentDescription = stringResource(Res.string.action_close))
                     }
                 },
             )
@@ -110,7 +127,7 @@ fun UserFormScreen(
                     email = state.email,
                     nameErrorMessage = state.nameErrorShown?.toMessage(),
                     emailErrorMessage = if (state.isEmailTaken) {
-                        "This email is already taken"
+                        stringResource(Res.string.form_email_taken)
                     } else {
                         state.emailErrorShown?.toMessage()
                     },
@@ -125,7 +142,7 @@ fun UserFormScreen(
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 SubmitButton(
-                    text = if (state.isEditing) "Save changes" else "Create user",
+                    text = stringResource(if (state.isEditing) Res.string.form_submit_save else Res.string.form_submit_create),
                     isSaving = state.isSaving,
                     enabled = state.canSubmit,
                     onClick = { onAction(UserFormAction.OnSubmitClick) },

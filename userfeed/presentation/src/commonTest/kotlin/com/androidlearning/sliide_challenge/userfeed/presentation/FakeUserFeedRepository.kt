@@ -8,9 +8,11 @@ import com.androidlearning.sliide_challenge.userfeed.domain.FeedUserId
 import com.androidlearning.sliide_challenge.userfeed.domain.RejectedCreation
 import com.androidlearning.sliide_challenge.userfeed.domain.UserFeedRepository
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.withContext
 
 /**
  * Records every call. A create or update returns [nextResult], first waiting for [pendingSave] when one is set, so a
@@ -27,14 +29,22 @@ class FakeUserFeedRepository : UserFeedRepository {
     val updateCalls = mutableListOf<Triple<FeedUserId, String, String>>()
     val deleteCalls = mutableListOf<FeedUserId>()
 
-    /** Creates and updates that got past [pendingSave], i.e. were not cancelled while waiting. */
+    /** What [refreshUsers] returns, first waiting for [pendingRefresh] when one is set. */
+    var refreshResult: EmptyResult<DataError.Network> = Result.Success(Unit)
+    var pendingRefresh: CompletableDeferred<Unit>? = null
+    var refreshCalls = 0
+
+    /**
+     * Creates and updates that got past [pendingSave]. Like the real repository, a save finishes even if its caller is
+     * cancelled while waiting.
+     */
     var completedSaves = 0
 
     override fun observeUsers(): Flow<List<FeedUser>> = users
 
     override suspend fun createUser(name: String, email: String): EmptyResult<DataError.Network> {
         createCalls += name to email
-        pendingSave?.await()
+        withContext(NonCancellable) { pendingSave?.await() }
         completedSaves++
         val result = nextResult
         if (result is Result.Error && result.error == DataError.Network.UNPROCESSABLE_ENTITY) {
@@ -43,9 +53,15 @@ class FakeUserFeedRepository : UserFeedRepository {
         return result
     }
 
+    override suspend fun refreshUsers(): EmptyResult<DataError.Network> {
+        refreshCalls++
+        pendingRefresh?.await()
+        return refreshResult
+    }
+
     override suspend fun updateUser(id: FeedUserId, name: String, email: String): EmptyResult<DataError.Network> {
         updateCalls += Triple(id, name, email)
-        pendingSave?.await()
+        withContext(NonCancellable) { pendingSave?.await() }
         completedSaves++
         return nextResult
     }

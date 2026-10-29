@@ -12,6 +12,9 @@ interface UserFeedApi {
     /** `PATCH /users/{id}`. */
     suspend fun updateUser(id: Long, name: String, email: String): Result<UserDto, DataError.Network>
 
+    /** `GET /users?email=`; the user whose email matches exactly (ignoring case), or null if there is none. */
+    suspend fun findUserByEmail(email: String): Result<UserDto?, DataError.Network>
+
     /** `DELETE /users/{id}`; succeeds on 204, which has no body. */
     suspend fun deleteUser(id: Long): EmptyResult<DataError.Network>
 }

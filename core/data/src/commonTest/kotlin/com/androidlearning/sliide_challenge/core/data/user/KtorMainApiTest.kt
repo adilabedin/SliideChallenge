@@ -84,6 +84,46 @@ class KtorMainApiTest {
     }
 
     @Test
+    fun `follows the new last page when the dataset grows between requests`() = runTest {
+        val result = api(pageCountForRequest = { index -> if (index == 0) "5" else "6" }).getLastPageUsers()
+
+        assertThat(result).isEqualTo(
+            Result.Success(listOf(UserDto(id = 6, name = "User 6", email = "user6@example.test"))),
+        )
+        assertThat(requestedPages()).containsExactly("1", "5", "6")
+    }
+
+    @Test
+    fun `a later refresh goes straight to the remembered last page`() = runTest {
+        val api = api()
+        api.getLastPageUsers()
+        requestedUrls.clear()
+
+        val result = api.getLastPageUsers()
+
+        assertThat(result).isEqualTo(
+            Result.Success(listOf(UserDto(id = 5, name = "User 5", email = "user5@example.test"))),
+        )
+        assertThat(requestedPages()).containsExactly("5")
+    }
+
+    @Test
+    fun `an empty dataset is an empty last page`() = runTest {
+        val result = api(pageCountForRequest = { "0" }).getLastPageUsers()
+
+        assertThat(result).isEqualTo(Result.Success(emptyList()))
+        assertThat(requestedPages()).containsExactly("1")
+    }
+
+    @Test
+    fun `gives up when the page count changes on every request`() = runTest {
+        val result = api(pageCountForRequest = { index -> "${index + 5}" }).getLastPageUsers()
+
+        assertThat(result).isEqualTo(Result.Error(DataError.Network.UNKNOWN))
+        assertThat(requestedPages()).containsExactly("1", "5", "6")
+    }
+
+    @Test
     fun `missing page count header is an error rather than a guess`() = runTest {
         val result = api(pageCountForRequest = { null }).getLastPageUsers()
 

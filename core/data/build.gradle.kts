@@ -1,5 +1,6 @@
 plugins {
     alias(libs.plugins.convention.kmp.library)
+    alias(libs.plugins.convention.buildkonfig)
 }
 
 kotlin {
@@ -8,6 +9,7 @@ kotlin {
             implementation(projects.core.domain)
             implementation(projects.core.database)
             api(libs.bundles.ktor.common)
+            implementation(libs.koin.core)
         }
         androidMain.dependencies {
             implementation(libs.ktor.client.okhttp)

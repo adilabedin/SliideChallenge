@@ -11,5 +11,6 @@ object ApiConstants {
 
     const val PAGE_PARAM = "page"
     const val PER_PAGE_PARAM = "per_page"
+    const val EMAIL_PARAM = "email"
     const val PAGE_COUNT_HEADER = "x-pagination-pages"
 }

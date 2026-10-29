@@ -5,6 +5,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.toRoute
+import com.androidlearning.sliide_challenge.core.presentation.snackbar.SnackbarControllerHost
 import com.androidlearning.sliide_challenge.userfeed.domain.FeedUserId
 import com.androidlearning.sliide_challenge.userfeed.presentation.feed.UserFeedRoot
 import com.androidlearning.sliide_challenge.userfeed.presentation.form.UserFormMode
@@ -42,21 +43,24 @@ data class UserFormRoute(
 @Composable
 fun NavigationRoot() {
     val navController = rememberNavController()
-    NavHost(
-        navController = navController,
-        startDestination = UserFeedRoute,
-    ) {
-        composable<UserFeedRoute> {
-            UserFeedRoot(
-                onAddUserClick = { navController.navigate(UserFormRoute()) },
-                onEditUser = { id -> navController.navigate(UserFormRoute.edit(id)) },
-            )
-        }
-        composable<UserFormRoute> { backStackEntry ->
-            UserFormRoot(
-                mode = backStackEntry.toRoute<UserFormRoute>().toMode(),
-                onNavigateBack = { navController.navigateUp() },
-            )
+    // Above the NavHost, so a screen can leave with a message still on show.
+    SnackbarControllerHost {
+        NavHost(
+            navController = navController,
+            startDestination = UserFeedRoute,
+        ) {
+            composable<UserFeedRoute> {
+                UserFeedRoot(
+                    onAddUserClick = { navController.navigate(UserFormRoute()) },
+                    onEditUser = { id -> navController.navigate(UserFormRoute.edit(id)) },
+                )
+            }
+            composable<UserFormRoute> { backStackEntry ->
+                UserFormRoot(
+                    mode = backStackEntry.toRoute<UserFormRoute>().toMode(),
+                    onNavigateBack = { navController.navigateUp() },
+                )
+            }
         }
     }
 }

@@ -18,6 +18,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.androidlearning.sliide_challenge.core.designsystem.theme.SliideTheme
+import com.androidlearning.sliide_challenge.userfeed.presentation.resources.Res
+import com.androidlearning.sliide_challenge.userfeed.presentation.resources.action_delete_user
+import org.jetbrains.compose.resources.stringResource
 
 /** A full-width, error-tinted button that starts deleting a user; pair it with [DeleteUserSheet] to confirm. */
 @Composable
@@ -40,7 +43,7 @@ fun DeleteUserButton(
     ) {
         Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(ButtonDefaults.IconSize))
         Spacer(modifier = Modifier.width(ButtonDefaults.IconSpacing))
-        Text("Delete user")
+        Text(stringResource(Res.string.action_delete_user))
     }
 }
 

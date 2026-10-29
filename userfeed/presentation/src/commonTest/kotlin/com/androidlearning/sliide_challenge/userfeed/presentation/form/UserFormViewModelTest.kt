@@ -178,7 +178,7 @@ class UserFormViewModelTest {
     }
 
     @Test
-    fun `a save in flight still finishes after the form is closed`() {
+    fun `a create refused after the form is closed is left for the feed to report`() {
         val pendingSave = CompletableDeferred<Unit>()
         repository.pendingSave = pendingSave
         repository.nextResult = Result.Error(DataError.Network.UNPROCESSABLE_ENTITY)
@@ -190,8 +190,8 @@ class UserFormViewModelTest {
         pendingSave.complete(Unit)
 
         assertThat(repository.completedSaves).isEqualTo(1)
-        // The follow-up after the repository call (dropping the rejection record) also ran.
-        assertThat(repository.rejectedCreations.value).isEmpty()
+        // The form never showed the error, so the record stays for the feed's snackbar.
+        assertThat(repository.rejectedCreations.value.map { it.email }).containsExactly("ada@example.com")
     }
 
     @Test

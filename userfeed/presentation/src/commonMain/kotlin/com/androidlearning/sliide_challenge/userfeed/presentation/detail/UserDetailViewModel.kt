@@ -9,7 +9,6 @@ import com.androidlearning.sliide_challenge.userfeed.domain.FeedUserId
 import com.androidlearning.sliide_challenge.userfeed.domain.UserFeedRepository
 import com.androidlearning.sliide_challenge.userfeed.domain.UserValidator
 import com.androidlearning.sliide_challenge.userfeed.presentation.feed.toFeedUserUi
-import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
@@ -25,7 +24,6 @@ import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Instant
@@ -155,9 +153,8 @@ class UserDetailViewModel(
         val email = UserValidator.normalizeEmail(current.email)
         screenState.update { it.copy(isSaving = true) }
         viewModelScope.launch {
-            // The repository writes locally, calls GoRest, then queues the change if the call failed. Cancelling
-            // between those steps (the screen being closed) would leave a local change that never syncs.
-            withContext(NonCancellable) { userFeedRepository.updateUser(userId, name, email) }
+            // The repository finishes the save even if the screen is closed meanwhile.
+            userFeedRepository.updateUser(userId, name, email)
             stopEditing()
         }
     }

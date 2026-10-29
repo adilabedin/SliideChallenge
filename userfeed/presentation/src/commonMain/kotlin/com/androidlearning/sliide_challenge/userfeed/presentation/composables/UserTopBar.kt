@@ -25,6 +25,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.androidlearning.sliide_challenge.core.designsystem.theme.SliideTheme
+import com.androidlearning.sliide_challenge.userfeed.presentation.resources.Res
+import com.androidlearning.sliide_challenge.userfeed.presentation.resources.action_back
+import com.androidlearning.sliide_challenge.userfeed.presentation.resources.action_save
+import com.androidlearning.sliide_challenge.userfeed.presentation.resources.detail_cancel_editing
+import com.androidlearning.sliide_challenge.userfeed.presentation.resources.detail_edit_user
+import com.androidlearning.sliide_challenge.userfeed.presentation.resources.detail_title
+import com.androidlearning.sliide_challenge.userfeed.presentation.resources.detail_title_editing
+import org.jetbrains.compose.resources.stringResource
 
 /**
  * The app bar of a screen that shows a user and edits them in place. Viewing shows a back arrow and an edit button.
@@ -50,15 +58,15 @@ fun UserTopBar(
     TopAppBar(
         modifier = modifier,
         colors = TopAppBarDefaults.topAppBarColors(containerColor = containerColor),
-        title = { Text(if (isEditing) "Edit User" else "User") },
+        title = { Text(stringResource(if (isEditing) Res.string.detail_title_editing else Res.string.detail_title)) },
         navigationIcon = {
             if (isEditing) {
                 IconButton(onClick = onCancelEditClick, enabled = !isSaving) {
-                    Icon(Icons.Default.Close, contentDescription = "Cancel editing")
+                    Icon(Icons.Default.Close, contentDescription = stringResource(Res.string.detail_cancel_editing))
                 }
             } else if (onBackClick != null) {
                 IconButton(onClick = onBackClick) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(Res.string.action_back))
                 }
             }
         },
@@ -72,12 +80,12 @@ fun UserTopBar(
                         if (isSaving) {
                             CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
                         } else {
-                            Text("Save")
+                            Text(stringResource(Res.string.action_save))
                         }
                     }
                 } else {
                     IconButton(onClick = onEditClick, enabled = canEdit) {
-                        Icon(Icons.Default.Edit, contentDescription = "Edit user")
+                        Icon(Icons.Default.Edit, contentDescription = stringResource(Res.string.detail_edit_user))
                     }
                 }
             }

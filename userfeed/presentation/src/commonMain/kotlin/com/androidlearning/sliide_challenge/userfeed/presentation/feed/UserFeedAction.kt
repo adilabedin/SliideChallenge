@@ -3,6 +3,9 @@ package com.androidlearning.sliide_challenge.userfeed.presentation.feed
 import com.androidlearning.sliide_challenge.userfeed.domain.FeedUserId
 
 sealed interface UserFeedAction {
+    /** Pulled the list down: sync queued changes and fetch the last GoRest page. */
+    data object OnRefresh : UserFeedAction
+
     /** Opens [user]'s details while browsing, edits them in [FeedMode.Edit] and ticks them in [FeedMode.Delete]. */
     data class OnUserClick(val user: FeedUserUi) : UserFeedAction
 
