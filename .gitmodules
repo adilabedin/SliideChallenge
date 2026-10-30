@@ -1,0 +1,3 @@
+[submodule ".claude/Skills"]
+	path = .claude/Skills
+	url = https://github.com/PL-Coding-GmbH/Skills.git

@@ -17,8 +17,8 @@ captures
 !*.xcworkspace/contents.xcworkspacedata
 **/xcshareddata/WorkspaceSettings.xcsettings
 node_modules/
-.claude/
-CLAUDE.md
-AGENTS.md
+# Claude Code: personal overrides and scratch worktrees stay local; the shared AI setup is committed.
+.claude/settings.local.json
+.claude/worktrees/
 # IDE (VS Code / Cursor Kotlin LSP) compiled output
 build-logic/convention/bin/

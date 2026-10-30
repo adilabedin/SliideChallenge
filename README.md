@@ -1,16 +1,144 @@
-This is a Kotlin Multiplatform project targeting Android, iOS.
+# Sliide User Management (KMP)
 
-* [/iosApp](./iosApp/iosApp) contains an iOS application. Even if you’re sharing your UI with Compose Multiplatform,
-  you need this entry point for your iOS app. This is also where you should add SwiftUI code for your project.
+A Kotlin Multiplatform user-management app for Android and iOS, built on the [GoRest](https://gorest.co.in) API.
+The UI is 100% shared Compose Multiplatform (Material 3, dark mode, adaptive layouts). The architecture is Clean
+Architecture + MVI, with Ktor for networking, Room KMP as an offline-first cache and Koin for DI.
 
-* [/shared](./shared/src) is for code that will be shared across your Compose Multiplatform applications.
-  It contains several subfolders:
-  - [commonMain](./shared/src/commonMain/kotlin) is for code that’s common for all targets.
-  - Other folders are for Kotlin code that will be compiled for only the platform indicated in the folder name.
-    For example, if you want to use Apple’s CoreCrypto for the iOS part of your Kotlin app,
-    the [iosMain](./shared/src/iosMain/kotlin) folder would be the right place for such calls.
-    Similarly, if you want to edit the Desktop (JVM) specific part, the [jvmMain](./shared/src/jvmMain/kotlin)
-    folder is the appropriate location.
+- [Architecture at a glance](#architecture-at-a-glance)
+- [AI setup](#ai-setup): how the app was built with Claude Code, the skills it used, and the quality gates on the agent
+- [Architecture notes](#architecture-notes): design decisions per area
+- [Assumptions & trade-offs](#assumptions--trade-offs)
+- [Running the apps](#running-the-apps) · [Running tests and checks](#running-tests-and-checks)
+
+## Architecture at a glance
+
+### Modules
+
+Every module is built by a convention plugin from `build-logic` (`kmp.library`, `cmp.library`, `cmp.feature`, `room`,
+`buildkonfig`, `ktlint`), so module build files only declare their dependencies. Arrows mean "depends on".
+
+```mermaid
+flowchart TD
+    subgraph entry["App entry points"]
+        androidApp[":androidApp<br/><i>Android shell, WorkManager</i>"]
+        iosApp["iosApp<br/><i>Xcode shell, BGTaskScheduler</i>"]
+        composeApp[":composeApp<br/><i>App(), navigation, Koin assembly</i>"]
+    end
+
+    subgraph feature["Feature: userfeed"]
+        ufPresentation[":userfeed:presentation<br/><i>feed, form, detail screens + ViewModels (MVI)</i>"]
+        ufDomain[":userfeed:domain<br/><i>models, repository interfaces, validator</i>"]
+        ufData[":userfeed:data<br/><i>offline-first repository, sync</i>"]
+        ufDatabase[":userfeed:database<br/><i>created users, pending changes (Room)</i>"]
+    end
+
+    subgraph core["Core"]
+        corePresentation[":core:presentation<br/><i>MainViewModel, SnackbarController, ObserveAsEvents</i>"]
+        coreDesignsystem[":core:designsystem<br/><i>theme, shimmer, components</i>"]
+        coreDomain[":core:domain<br/><i>Result, DataError, User, MainRepository</i>"]
+        coreData[":core:data<br/><i>Ktor HttpClient, safeCall, GoRest API</i>"]
+        coreDatabase[":core:database<br/><i>SliideDatabase, UserDao (Room)</i>"]
+    end
+
+    iosApp -->|framework| composeApp
+    androidApp --> composeApp
+    androidApp -.->|sync worker| ufData
+    composeApp --> feature
+    composeApp --> core
+
+    ufPresentation --> ufDomain
+    ufPresentation --> corePresentation
+    ufPresentation --> coreDesignsystem
+    ufPresentation --> coreDomain
+    ufData --> ufDomain
+    ufData --> ufDatabase
+    ufData --> coreData
+    ufData --> coreDatabase
+    ufData --> coreDomain
+    ufDomain --> coreDomain
+    ufDatabase --> coreDomain
+
+    coreDesignsystem --> corePresentation
+    corePresentation --> coreDomain
+    coreData --> coreDomain
+    coreData --> coreDatabase
+```
+
+**Dependency rules** (enforced by how the modules are wired):
+
+- Presentation depends on **domain** only, never on a data module. ViewModels see repository *interfaces*.
+- Data modules implement the interfaces declared in domain. Only the app modules see both sides, to bind them in Koin.
+- Features never depend on other features. Shared code goes into `:core:*`.
+
+### Runtime data flow
+
+Room is the single source of truth. The UI only ever observes the database; the network writes into it.
+
+```mermaid
+flowchart LR
+    UI["Compose screen<br/>(Root/Screen split)"] -- Action --> VM["ViewModel<br/>(MVI: State + Events)"]
+    VM -- "State (StateFlow)" --> UI
+    VM -- calls --> Repo["Repository interface<br/>(domain)"]
+    Repo -. implemented by .-> Offline["OfflineFirst…Repository<br/>(data)"]
+    Offline -- "observe (Flow)" --> Room[("Room KMP")]
+    Offline -- "fetch last page / POST / DELETE" --> Api["Ktor → GoRest API"]
+    Api -- "Result#lt;T, DataError#gt;" --> Offline
+    Offline -- "write" --> Room
+    Sync["Background sync<br/>(WorkManager / BGTaskScheduler)"] -- "pending changes" --> Offline
+```
+
+## AI setup
+
+The app was built with **Claude Code** as the coding agent, steered by three things committed to this repo: a project
+brief, a skill library, and hooks that gate the agent's output.
+
+```mermaid
+flowchart LR
+    Dev["Developer prompt"] --> Agent["Claude Code"]
+    Brief["CLAUDE.md / AGENTS.md<br/>brief, stack, module rules,<br/>Definition of Done"] --> Agent
+    Skills[".claude/Skills<br/>skill library, loaded on demand"] --> Agent
+    Agent --> Code["Code changes"]
+    Code --> Stop{"Stop hook<br/>ktlintCheck"}
+    Stop -- "new violations: sent back to the agent" --> Agent
+    Stop -- clean --> Gate["Definition of Done<br/>./gradlew build<br/>+ iOS framework link"]
+    Gate --> Push{"PreToolUse hook on git push<br/>testAndroidHostTest"}
+    Push -- "tests fail: push blocked, output sent back" --> Agent
+    Push -- green --> Remote["git push"]
+```
+
+| Piece | Where | What it does |
+|---|---|---|
+| Project brief | [`CLAUDE.md`](CLAUDE.md) (symlink to [`AGENTS.md`](AGENTS.md), so other agents read the same file) | The challenge requirements, the fixed stack, the multi-module target and dependency rules, the Definition of Done (`./gradlew build` + iOS link must pass, never weaken tests to get green), and an index of the skills with when to use each one. |
+| Skill library | [`.claude/Skills`](.claude/Skills) (git submodule of [PL-Coding-GmbH/Skills](https://github.com/PL-Coding-GmbH/Skills), MIT) | ~30 skills on KMP module structure, the data layer, error handling, MVI presentation, Koin, navigation, coroutines/flows, Compose, adaptive layouts and testing. The brief tells the agent to load a skill **only** when the task matches it, and to prefer the KMP-specific skill when two overlap. The notes below name the skill behind a decision where it applies (e.g. `android-di-koin`, `kotlin-coroutines`). |
+| Quality gates | [`.claude/settings.json`](.claude/settings.json), [`.claude/hooks/`](.claude/hooks) | Two hooks, described below, that run whether or not the agent remembers to check its own work. |
+| Memory | Claude Code's per-project memory (local, not in the repo) | Kept the clarifications agreed during the build (e.g. "last page" means the literal last page, created users stay local-only, the Room schema stays at v1), so later sessions didn't re-ask or drift. |
+
+**Agents.** All of the work was done by the main Claude Code agent; no custom subagents were used. The skills
+submodule also ships reviewer agent definitions (`.claude/Skills/agents/`), but they are not registered in this
+project.
+
+### Quality gates on the agent
+
+A prompt can *ask* an agent to lint and test; a hook makes it happen every time. Both hooks are plain shell scripts.
+
+- **Lint after every turn: `Stop` → [`stop-lint.sh`](.claude/hooks/stop-lint.sh).** When the agent finishes a turn
+  with Kotlin changes in the working tree, the hook runs `./gradlew ktlintCheck`. New violations are returned to the
+  agent as a `block` decision with the file, line and rule, so it has to fix them (usually with `./gradlew ktlintFormat`)
+  before it can hand back. The hook checks `stop_hook_active`, so a violation the agent can't fix ends the turn instead
+  of looping.
+- **Unit tests before every push: `PreToolUse(Bash)` → [`pre-push-tests.sh`](.claude/hooks/pre-push-tests.sh).** Any
+  command containing `git push` (including `git -C dir push` and `git commit … && git push`) first runs
+  `./gradlew testAndroidHostTest` across all modules. If a test fails, the hook exits with code 2: the push never runs
+  and the failing test names go back to the agent. `onFailure: block` means a crash or timeout in the hook blocks the
+  push too, rather than letting it through.
+- **ktlint is part of the build, not only the hook.** A `ktlint` convention plugin applies
+  [ktlint-gradle](https://github.com/JLLeitschuh/ktlint-gradle) to every module (rules in [`.editorconfig`](.editorconfig),
+  Android Studio style, Composable-aware function naming). `ktlintCheck` is part of `check`, so `./gradlew build` fails
+  on new violations too. Violations from before the linter existed are recorded in each module's `ktlint-baseline.xml`
+  rather than fixed in one mass reformat.
+
+Both gates were checked against deliberate failures: a planted failing test blocked a synthetic `git push` with the
+test name in the message, and a badly formatted `commonMain` file produced a `block` listing each violation.
 
 ## Architecture notes
 
@@ -343,20 +471,16 @@ This is a Kotlin Multiplatform project targeting Android, iOS.
   feed's own `Scaffold`, the Scaffold can't lift the FAB above the snackbar by itself, so the controller exposes
   the snackbar's `visibleHeight` and the feed pads its FAB by that amount.
 
-### Running the apps
+## Running the apps
 
-Use the run configurations provided by the run widget in your IDE's toolbar. You can also use these commands and options:
+After cloning, fetch the skills submodule: `git submodule update --init`.
 
-- Android app: `./gradlew :androidApp:assembleDebug`
-- iOS app: open the [/iosApp](./iosApp) directory in Xcode and run it from there.
+- Android app: `./gradlew :androidApp:assembleDebug`, or the run configuration in the IDE.
+- iOS app: open [`iosApp`](./iosApp) in Xcode and run it from there.
 
-### Running tests
+## Running tests and checks
 
-Use the run button in your IDE's editor gutter, or run tests using Gradle tasks:
-
-- Android tests: `./gradlew :shared:testAndroidHostTest`
-- iOS tests: `./gradlew :shared:iosSimulatorArm64Test`
-
----
-
-Learn more about [Kotlin Multiplatform](https://www.jetbrains.com/help/kotlin-multiplatform-dev/get-started.html)…
+- Shared unit tests, all modules (the same command the pre-push hook runs): `./gradlew testAndroidHostTest`
+- iOS simulator tests (includes the in-memory Room tests): `./gradlew iosSimulatorArm64Test`
+- Lint: `./gradlew ktlintCheck`; auto-fix: `./gradlew ktlintFormat`
+- Definition of Done: `./gradlew build` and `./gradlew :composeApp:linkDebugFrameworkIosSimulatorArm64`

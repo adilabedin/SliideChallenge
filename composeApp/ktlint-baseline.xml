@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<baseline version="1.0">
+    <file name="src/commonMain/kotlin/com/androidlearning/sliide_challenge/App.kt">
+        <error line="19" column="5" source="standard:function-signature" />
+        <error line="19" column="51" source="standard:trailing-comma-on-declaration-site" />
+        <error line="19" column="52" source="standard:function-signature" />
+    </file>
+    <file name="src/commonMain/kotlin/com/androidlearning/sliide_challenge/di/InitKoin.kt">
+        <error line="21" column="39" source="standard:trailing-comma-on-call-site" />
+    </file>
+    <file name="src/commonMain/kotlin/com/androidlearning/sliide_challenge/navigation/NavigationRoot.kt">
+        <error line="24" column="5" source="standard:class-signature" />
+        <error line="25" column="5" source="standard:class-signature" />
+        <error line="25" column="31" source="standard:trailing-comma-on-declaration-site" />
+        <error line="25" column="32" source="standard:class-signature" />
+        <error line="27" column="33" source="standard:function-signature" />
+        <error line="35" column="50" source="standard:function-signature" />
+        <error line="50" column="45" source="standard:trailing-comma-on-call-site" />
+        <error line="55" column="90" source="standard:trailing-comma-on-call-site" />
+        <error line="61" column="68" source="standard:trailing-comma-on-call-site" />
+    </file>
+    <file name="src/commonMain/kotlin/com/androidlearning/sliide_challenge/splash/SplashContent.kt">
+        <error line="26" column="44" source="standard:trailing-comma-on-call-site" />
+    </file>
+    <file name="src/iosMain/kotlin/com/androidlearning/sliide_challenge/MainViewController.kt">
+        <error line="11" column="5" source="standard:function-naming" />
+        <error line="12" column="64" source="standard:trailing-comma-on-call-site" />
+    </file>
+</baseline>

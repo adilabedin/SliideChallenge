@@ -35,6 +35,8 @@ kotlinx-datetime = "0.8.0"
 koin = "4.2.2"
 ktor = "3.6.0"
 buildkonfig = "0.17.1"
+ktlint-gradle = "14.2.0"
+ktlint = "1.8.0"
 
 # Testing
 assertk = "0.28.1"
@@ -49,6 +51,7 @@ compose-compiler-gradlePlugin = { module = "org.jetbrains.kotlin:compose-compile
 ksp-gradlePlugin = { module = "com.google.devtools.ksp:com.google.devtools.ksp.gradle.plugin", version.ref = "ksp" }
 room-gradlePlugin = { module = "androidx.room:room-gradle-plugin", version.ref = "room" }
 buildkonfig-gradlePlugin = { module = "com.codingfeline.buildkonfig:buildkonfig-gradle-plugin", version.ref = "buildkonfig" }
+ktlint-gradlePlugin = { module = "org.jlleitschuh.gradle:ktlint-gradle", version.ref = "ktlint-gradle" }
 buildkonfig-compiler = { module = "com.codingfeline.buildkonfig:buildkonfig-compiler", version.ref = "buildkonfig" }
 
 # Android app
@@ -122,6 +125,7 @@ compose-compiler = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "
 ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
 room = { id = "androidx.room", version.ref = "room" }
 buildkonfig = { id = "com.codingfeline.buildkonfig", version.ref = "buildkonfig" }
+ktlint = { id = "org.jlleitschuh.gradle.ktlint", version.ref = "ktlint-gradle" }
 
 # Convention plugins (build-logic)
 convention-android-application-compose = { id = "com.androidlearning.sliide.convention.android.application.compose", version = "unspecified" }
@@ -131,3 +135,4 @@ convention-cmp-library = { id = "com.androidlearning.sliide.convention.cmp.libra
 convention-cmp-feature = { id = "com.androidlearning.sliide.convention.cmp.feature", version = "unspecified" }
 convention-room = { id = "com.androidlearning.sliide.convention.room", version = "unspecified" }
 convention-buildkonfig = { id = "com.androidlearning.sliide.convention.buildkonfig", version = "unspecified" }
+convention-ktlint = { id = "com.androidlearning.sliide.convention.ktlint", version = "unspecified" }

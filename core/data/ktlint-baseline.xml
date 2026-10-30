@@ -1,0 +1,120 @@
+<?xml version="1.0" encoding="utf-8"?>
+<baseline version="1.0">
+    <file name="src/androidHostTest/kotlin/com/androidlearning/sliide_challenge/core/data/networking/PlatformNetworkErrorAndroidTest.kt">
+        <error line="3" column="1" source="standard:import-ordering" />
+    </file>
+    <file name="src/androidMain/kotlin/com/androidlearning/sliide_challenge/core/data/networking/PlatformNetworkError.android.kt">
+        <error line="9" column="67" source="standard:function-expression-body" />
+        <error line="14" column="1" source="standard:blank-line-between-when-conditions" />
+        <error line="15" column="1" source="standard:blank-line-between-when-conditions" />
+    </file>
+    <file name="src/commonMain/kotlin/com/androidlearning/sliide_challenge/core/data/di/CoreDataModule.kt">
+        <error line="3" column="1" source="standard:import-ordering" />
+    </file>
+    <file name="src/commonMain/kotlin/com/androidlearning/sliide_challenge/core/data/networking/HttpClientExt.kt">
+        <error line="3" column="1" source="standard:import-ordering" />
+        <error line="28" column="49" source="standard:trailing-comma-on-declaration-site" />
+        <error line="41" column="18" source="standard:trailing-comma-on-declaration-site" />
+        <error line="42" column="40" source="standard:function-expression-body" />
+        <error line="53" column="18" source="standard:trailing-comma-on-declaration-site" />
+        <error line="54" column="40" source="standard:function-expression-body" />
+        <error line="65" column="49" source="standard:trailing-comma-on-declaration-site" />
+        <error line="66" column="40" source="standard:function-expression-body" />
+        <error line="76" column="5" source="standard:function-signature" />
+        <error line="76" column="32" source="standard:trailing-comma-on-declaration-site" />
+        <error line="76" column="33" source="standard:function-signature" />
+        <error line="98" column="5" source="standard:function-signature" />
+        <error line="98" column="27" source="standard:trailing-comma-on-declaration-site" />
+        <error line="98" column="28" source="standard:function-signature" />
+        <error line="99" column="33" source="standard:function-expression-body" />
+        <error line="110" column="1" source="standard:blank-line-between-when-conditions" />
+        <error line="111" column="1" source="standard:blank-line-between-when-conditions" />
+        <error line="112" column="1" source="standard:blank-line-between-when-conditions" />
+        <error line="113" column="1" source="standard:blank-line-between-when-conditions" />
+        <error line="114" column="1" source="standard:blank-line-between-when-conditions" />
+        <error line="115" column="1" source="standard:blank-line-between-when-conditions" />
+        <error line="116" column="1" source="standard:blank-line-between-when-conditions" />
+        <error line="117" column="1" source="standard:blank-line-between-when-conditions" />
+        <error line="118" column="1" source="standard:blank-line-between-when-conditions" />
+        <error line="119" column="1" source="standard:blank-line-between-when-conditions" />
+        <error line="120" column="1" source="standard:blank-line-between-when-conditions" />
+        <error line="121" column="1" source="standard:blank-line-between-when-conditions" />
+        <error line="126" column="43" source="standard:function-expression-body" />
+    </file>
+    <file name="src/commonMain/kotlin/com/androidlearning/sliide_challenge/core/data/networking/HttpClientFactory.kt">
+        <error line="33" column="18" source="standard:trailing-comma-on-call-site" />
+    </file>
+    <file name="src/commonMain/kotlin/com/androidlearning/sliide_challenge/core/data/networking/NetworkResponse.kt">
+        <error line="7" column="5" source="standard:class-signature" />
+        <error line="8" column="5" source="standard:class-signature" />
+        <error line="8" column="25" source="standard:trailing-comma-on-declaration-site" />
+        <error line="8" column="26" source="standard:class-signature" />
+    </file>
+    <file name="src/commonMain/kotlin/com/androidlearning/sliide_challenge/core/data/user/KtorMainApi.kt">
+        <error line="11" column="5" source="standard:class-signature" />
+        <error line="11" column="39" source="standard:trailing-comma-on-declaration-site" />
+        <error line="11" column="40" source="standard:class-signature" />
+        <error line="49" column="76" source="standard:trailing-comma-on-call-site" />
+        <error line="50" column="14" source="standard:trailing-comma-on-call-site" />
+        <error line="53" column="55" source="standard:function-signature" />
+    </file>
+    <file name="src/commonMain/kotlin/com/androidlearning/sliide_challenge/core/data/user/OfflineFirstMainRepository.kt">
+        <error line="3" column="1" source="standard:import-ordering" />
+        <error line="24" column="44" source="standard:trailing-comma-on-declaration-site" />
+        <error line="30" column="70" source="standard:function-expression-body" />
+    </file>
+    <file name="src/commonMain/kotlin/com/androidlearning/sliide_challenge/core/data/user/UserDto.kt">
+        <error line="8" column="5" source="standard:class-signature" />
+        <error line="9" column="5" source="standard:class-signature" />
+        <error line="10" column="5" source="standard:class-signature" />
+        <error line="10" column="22" source="standard:trailing-comma-on-declaration-site" />
+        <error line="10" column="23" source="standard:class-signature" />
+    </file>
+    <file name="src/commonMain/kotlin/com/androidlearning/sliide_challenge/core/data/user/UserEntityMapper.kt">
+        <error line="11" column="28" source="standard:trailing-comma-on-call-site" />
+        <error line="17" column="18" source="standard:trailing-comma-on-call-site" />
+    </file>
+    <file name="src/commonMain/kotlin/com/androidlearning/sliide_challenge/core/data/user/UserMapper.kt">
+        <error line="8" column="18" source="standard:trailing-comma-on-call-site" />
+    </file>
+    <file name="src/commonTest/kotlin/com/androidlearning/sliide_challenge/core/data/networking/HttpClientExtTest.kt">
+        <error line="3" column="1" source="standard:import-ordering" />
+        <error line="33" column="9" source="standard:function-signature" />
+        <error line="33" column="86" source="standard:trailing-comma-on-declaration-site" />
+        <error line="33" column="87" source="standard:function-signature" />
+        <error line="34" column="9" source="standard:function-signature" />
+        <error line="40" column="10" source="standard:trailing-comma-on-call-site" />
+        <error line="52" column="118" source="standard:trailing-comma-on-call-site" />
+        <error line="107" column="45" source="standard:trailing-comma-on-call-site" />
+    </file>
+    <file name="src/commonTest/kotlin/com/androidlearning/sliide_challenge/core/data/user/KtorMainApiTest.kt">
+        <error line="3" column="1" source="standard:import-ordering" />
+        <error line="31" column="9" source="standard:function-signature" />
+        <error line="32" column="9" source="standard:function-signature" />
+        <error line="32" column="56" source="standard:trailing-comma-on-declaration-site" />
+        <error line="32" column="57" source="standard:function-signature" />
+        <error line="33" column="9" source="standard:function-signature" />
+        <error line="47" column="14" source="standard:trailing-comma-on-call-site" />
+        <error line="48" column="10" source="standard:trailing-comma-on-call-site" />
+        <error line="58" column="99" source="standard:trailing-comma-on-call-site" />
+        <error line="62" column="70" source="standard:trailing-comma-on-call-site" />
+        <error line="71" column="99" source="standard:trailing-comma-on-call-site" />
+        <error line="81" column="99" source="standard:trailing-comma-on-call-site" />
+        <error line="91" column="99" source="standard:trailing-comma-on-call-site" />
+        <error line="105" column="99" source="standard:trailing-comma-on-call-site" />
+    </file>
+    <file name="src/commonTest/kotlin/com/androidlearning/sliide_challenge/core/data/user/OfflineFirstMainRepositoryTest.kt">
+        <error line="3" column="1" source="standard:import-ordering" />
+        <error line="55" column="56" source="standard:function-signature" />
+        <error line="67" column="10" source="standard:trailing-comma-on-call-site" />
+        <error line="82" column="51" source="standard:trailing-comma-on-call-site" />
+    </file>
+    <file name="src/commonTest/kotlin/com/androidlearning/sliide_challenge/core/data/user/UserMapperTest.kt">
+        <error line="15" column="57" source="standard:trailing-comma-on-call-site" />
+        <error line="22" column="61" source="standard:trailing-comma-on-call-site" />
+        <error line="23" column="14" source="standard:trailing-comma-on-call-site" />
+    </file>
+    <file name="src/iosMain/kotlin/com/androidlearning/sliide_challenge/core/data/networking/PlatformNetworkError.ios.kt">
+        <error line="22" column="38" source="standard:trailing-comma-on-call-site" />
+    </file>
+</baseline>

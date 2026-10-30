@@ -1,0 +1,30 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/pre-push-tests.sh",
+            "timeout": 900,
+            "onFailure": "block",
+            "statusMessage": "Running unit tests before push..."
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/stop-lint.sh",
+            "timeout": 300,
+            "statusMessage": "Linting Kotlin with ktlint..."
+          }
+        ]
+      }
+    ]
+  }
+}

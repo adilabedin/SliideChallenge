@@ -15,6 +15,7 @@ dependencies {
     compileOnly(libs.room.gradlePlugin)
     compileOnly(libs.buildkonfig.gradlePlugin)
     compileOnly(libs.buildkonfig.compiler)
+    compileOnly(libs.ktlint.gradlePlugin)
 }
 
 java {
@@ -64,6 +65,10 @@ gradlePlugin {
         register("buildkonfig") {
             id = libs.plugins.convention.buildkonfig.get().pluginId
             implementationClass = "BuildKonfigConventionPlugin"
+        }
+        register("ktlint") {
+            id = libs.plugins.convention.ktlint.get().pluginId
+            implementationClass = "KtlintConventionPlugin"
         }
     }
 }

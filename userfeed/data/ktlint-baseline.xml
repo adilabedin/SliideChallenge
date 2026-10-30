@@ -1,0 +1,115 @@
+<?xml version="1.0" encoding="utf-8"?>
+<baseline version="1.0">
+    <file name="src/androidMain/kotlin/com/androidlearning/sliide_challenge/userfeed/data/sync/UserSyncWorker.kt">
+        <error line="19" column="61" source="standard:trailing-comma-on-declaration-site" />
+    </file>
+    <file name="src/androidMain/kotlin/com/androidlearning/sliide_challenge/userfeed/data/sync/WorkManagerUserSyncScheduler.kt">
+        <error line="17" column="5" source="standard:class-signature" />
+        <error line="17" column="33" source="standard:trailing-comma-on-declaration-site" />
+        <error line="17" column="34" source="standard:class-signature" />
+        <error line="25" column="29" source="standard:trailing-comma-on-call-site" />
+    </file>
+    <file name="src/commonMain/kotlin/com/androidlearning/sliide_challenge/userfeed/data/FeedUserMapper.kt">
+        <error line="18" column="41" source="standard:function-literal" />
+        <error line="18" column="83" source="standard:function-literal" />
+        <error line="18" column="90" source="standard:argument-list-wrapping" />
+        <error line="18" column="120" source="standard:argument-list-wrapping" />
+        <error line="18" column="121" source="standard:trailing-comma-on-call-site" />
+        <error line="18" column="121" source="standard:max-line-length" />
+        <error line="29" column="98" source="standard:trailing-comma-on-call-site" />
+    </file>
+    <file name="src/commonMain/kotlin/com/androidlearning/sliide_challenge/userfeed/data/KtorUserFeedApi.kt">
+        <error line="16" column="5" source="standard:class-signature" />
+        <error line="16" column="39" source="standard:trailing-comma-on-declaration-site" />
+        <error line="16" column="40" source="standard:class-signature" />
+        <error line="19" column="103" source="standard:function-signature" />
+        <error line="26" column="61" source="standard:trailing-comma-on-call-site" />
+        <error line="27" column="14" source="standard:trailing-comma-on-call-site" />
+        <error line="33" column="68" source="standard:trailing-comma-on-call-site" />
+        <error line="40" column="71" source="standard:trailing-comma-on-call-site" />
+        <error line="43" column="80" source="standard:function-signature" />
+    </file>
+    <file name="src/commonMain/kotlin/com/androidlearning/sliide_challenge/userfeed/data/OfflineFirstUserFeedRepository.kt">
+        <error line="3" column="1" source="standard:import-ordering" />
+        <error line="46" column="44" source="standard:trailing-comma-on-declaration-site" />
+        <error line="59" column="51" source="standard:trailing-comma-on-call-site" />
+        <error line="94" column="1" source="standard:blank-line-between-when-conditions" />
+        <error line="114" column="1" source="standard:blank-line-between-when-conditions" />
+        <error line="145" column="60" source="standard:trailing-comma-on-declaration-site" />
+        <error line="167" column="1" source="standard:blank-line-between-when-conditions" />
+        <error line="233" column="1" source="standard:blank-line-between-when-conditions" />
+        <error line="252" column="112" source="standard:trailing-comma-on-call-site" />
+    </file>
+    <file name="src/commonMain/kotlin/com/androidlearning/sliide_challenge/userfeed/data/UserRequestDtos.kt">
+        <error line="12" column="5" source="standard:class-signature" />
+        <error line="13" column="5" source="standard:class-signature" />
+        <error line="14" column="5" source="standard:class-signature" />
+        <error line="15" column="5" source="standard:class-signature" />
+        <error line="15" column="23" source="standard:trailing-comma-on-declaration-site" />
+        <error line="15" column="24" source="standard:class-signature" />
+        <error line="26" column="5" source="standard:class-signature" />
+        <error line="27" column="5" source="standard:class-signature" />
+        <error line="27" column="22" source="standard:trailing-comma-on-declaration-site" />
+        <error line="27" column="23" source="standard:class-signature" />
+    </file>
+    <file name="src/commonMain/kotlin/com/androidlearning/sliide_challenge/userfeed/data/sync/PendingSyncScheduling.kt">
+        <error line="20" column="53" source="standard:trailing-comma-on-declaration-site" />
+    </file>
+    <file name="src/commonTest/kotlin/com/androidlearning/sliide_challenge/userfeed/data/KtorUserFeedApiTest.kt">
+        <error line="3" column="1" source="standard:import-ordering" />
+        <error line="33" column="14" source="standard:trailing-comma-on-call-site" />
+        <error line="34" column="10" source="standard:trailing-comma-on-call-site" />
+        <error line="56" column="83" source="standard:trailing-comma-on-call-site" />
+        <error line="57" column="18" source="standard:trailing-comma-on-call-site" />
+        <error line="58" column="14" source="standard:trailing-comma-on-call-site" />
+        <error line="78" column="100" source="standard:trailing-comma-on-call-site" />
+    </file>
+    <file name="src/commonTest/kotlin/com/androidlearning/sliide_challenge/userfeed/data/OfflineFirstUserFeedRepositoryTest.kt">
+        <error line="3" column="1" source="standard:import-ordering" />
+        <error line="65" column="33" source="standard:statement-wrapping" />
+        <error line="65" column="55" source="standard:statement-wrapping" />
+        <error line="65" column="72" source="standard:statement-wrapping" />
+        <error line="68" column="33" source="standard:statement-wrapping" />
+        <error line="68" column="60" source="standard:statement-wrapping" />
+        <error line="68" column="77" source="standard:statement-wrapping" />
+        <error line="72" column="73" source="standard:statement-wrapping" />
+        <error line="72" column="95" source="standard:statement-wrapping" />
+        <error line="72" column="112" source="standard:statement-wrapping" />
+        <error line="112" column="9" source="standard:class-signature" />
+        <error line="113" column="9" source="standard:class-signature" />
+        <error line="113" column="47" source="standard:trailing-comma-on-declaration-site" />
+        <error line="113" column="48" source="standard:class-signature" />
+        <error line="114" column="9" source="standard:class-signature" />
+        <error line="139" column="22" source="standard:function-literal" />
+        <error line="139" column="23" source="standard:wrapping" />
+        <error line="139" column="45" source="standard:argument-list-wrapping" />
+        <error line="139" column="89" source="standard:function-literal" />
+        <error line="139" column="103" source="standard:function-literal" />
+        <error line="139" column="121" source="standard:max-line-length" />
+        <error line="139" column="124" source="standard:function-literal" />
+        <error line="139" column="126" source="standard:function-literal" />
+        <error line="139" column="127" source="standard:function-literal" />
+        <error line="139" column="139" source="standard:function-literal" />
+        <error line="139" column="140" source="standard:argument-list-wrapping" />
+        <error line="139" column="142" source="standard:function-literal" />
+        <error line="254" column="10" source="standard:trailing-comma-on-call-site" />
+        <error line="274" column="73" source="standard:trailing-comma-on-call-site" />
+        <error line="290" column="119" source="standard:trailing-comma-on-call-site" />
+        <error line="337" column="77" source="standard:trailing-comma-on-call-site" />
+        <error line="341" column="74" source="standard:trailing-comma-on-call-site" />
+        <error line="342" column="14" source="standard:trailing-comma-on-call-site" />
+        <error line="401" column="37" source="standard:trailing-comma-on-call-site" />
+        <error line="402" column="14" source="standard:trailing-comma-on-call-site" />
+        <error line="415" column="117" source="standard:trailing-comma-on-call-site" />
+        <error line="494" column="83" source="standard:trailing-comma-on-call-site" />
+        <error line="773" column="79" source="standard:trailing-comma-on-call-site" />
+    </file>
+    <file name="src/commonTest/kotlin/com/androidlearning/sliide_challenge/userfeed/data/sync/PendingSyncSchedulingTest.kt">
+        <error line="3" column="1" source="standard:import-ordering" />
+    </file>
+    <file name="src/iosMain/kotlin/com/androidlearning/sliide_challenge/userfeed/data/sync/IosUserSync.kt">
+        <error line="20" column="61" source="standard:trailing-comma-on-declaration-site" />
+        <error line="26" column="30" source="standard:trailing-comma-on-call-site" />
+        <error line="32" column="47" source="standard:trailing-comma-on-call-site" />
+    </file>
+</baseline>
