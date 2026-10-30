@@ -33,7 +33,7 @@ flowchart TD
     end
 
     subgraph core["Core"]
-        corePresentation[":core:presentation<br/><i>MainViewModel, SnackbarController, ObserveAsEvents</i>"]
+        corePresentation[":core:presentation<br/><i>MainViewModel, showNow, ObserveAsEvents</i>"]
         coreDesignsystem[":core:designsystem<br/><i>theme, shimmer, components</i>"]
         coreDomain[":core:domain<br/><i>Result, DataError, User, MainRepository</i>"]
         coreData[":core:data<br/><i>Ktor HttpClient, safeCall, GoRest API</i>"]
@@ -361,9 +361,11 @@ test name in the message, and a badly formatted `commonMain` file produced a `bl
 - **ViewModel state holds data, not text.** `FeedUserUi.syncStatus` is a `SyncStatus`/`TimeAgo` value (e.g.
   `Synced(Minutes(5))`), which a composable turns into words. Unit tests assert the exact value, including the
   rounding and unit-boundary cases, without depending on resource loading.
-- **Snackbars that outlive their screen** ("User added" after the form closes) are passed as a `StringResource` to
-  `SnackbarController.show`, which loads the string on the controller's own scope. Loading it on the form's scope
-  would be cancelled when the form leaves, and the message would never show.
+- **Messages that outlive their screen** ("User added" after the form closes) are handed back, not shown by the form.
+  The form reports a `UserFormResult`; `NavigationRoot` puts its name on the feed's back-stack `SavedStateHandle`
+  (so it survives process death), and the feed shows it in its own `Scaffold` snackbar host. Every snackbar lives in
+  the feed's `Scaffold`, which also lifts the FAB above it. The one extra is `SnackbarHostState.showNow`, which lets
+  Undo replace a "couldn't refresh" message rather than wait behind it.
 
 ## Assumptions & trade-offs
 

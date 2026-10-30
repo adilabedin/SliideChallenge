@@ -1,7 +1,6 @@
 package com.androidlearning.sliide_challenge.userfeed.presentation.feed
 
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
@@ -15,6 +14,8 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
@@ -24,11 +25,10 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.tooling.preview.Preview
-import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigationevent.NavigationEventInfo
 import androidx.navigationevent.compose.NavigationBackHandler
@@ -36,7 +36,6 @@ import androidx.navigationevent.compose.rememberNavigationEventState
 import com.androidlearning.sliide_challenge.core.designsystem.components.layouts.SliideAdaptiveListDetailLayout
 import com.androidlearning.sliide_challenge.core.designsystem.components.layouts.showsListDetailOnePaneAtATime
 import com.androidlearning.sliide_challenge.core.designsystem.theme.SliideTheme
-import com.androidlearning.sliide_challenge.core.presentation.snackbar.LocalSnackbarController
 import com.androidlearning.sliide_challenge.core.presentation.util.ObserveAsEvents
 import com.androidlearning.sliide_challenge.core.presentation.util.currentDeviceConfiguration
 import com.androidlearning.sliide_challenge.userfeed.domain.FeedUserId
@@ -48,8 +47,11 @@ import com.androidlearning.sliide_challenge.userfeed.presentation.composables.Us
 import com.androidlearning.sliide_challenge.userfeed.presentation.composables.UserList
 import com.androidlearning.sliide_challenge.userfeed.presentation.composables.UserListPlaceholder
 import com.androidlearning.sliide_challenge.userfeed.presentation.detail.UserDetailRoot
+import com.androidlearning.sliide_challenge.userfeed.presentation.form.UserFormResult
 import com.androidlearning.sliide_challenge.userfeed.presentation.resources.Res
 import com.androidlearning.sliide_challenge.userfeed.presentation.resources.feed_add_user
+import kotlinx.coroutines.launch
+import org.jetbrains.compose.resources.getString
 import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.viewmodel.koinViewModel
 import org.koin.core.parameter.parametersOf
@@ -58,29 +60,45 @@ import org.koin.core.parameter.parametersOf
  * The feed and the opened user's details. A phone held upright shows one at a time; wider windows show both side by
  * side (see [SliideAdaptiveListDetailLayout]). Both arrangements are one destination, so turning the device mid-edit
  * keeps the edit: each user's details ViewModel lives in this destination, keyed by the user.
+ *
+ * @param formResult Why the user form last closed itself, to announce here since the form is gone. Cleared through
+ * [onFormResultShown] once it is on its way, so it shows once.
  */
 @Composable
 fun UserFeedRoot(
     onAddUserClick: () -> Unit,
     onEditUser: (FeedUserId) -> Unit,
-    viewModel: UserFeedViewModel = koinViewModel(),
+    formResult: UserFormResult? = null,
+    onFormResultShown: () -> Unit = {},
+    viewModel: UserFeedViewModel = koinViewModel()
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val configuration = currentDeviceConfiguration()
     val isOnePaneAtATime = configuration.showsListDetailOnePaneAtATime
-    val snackbarController = LocalSnackbarController.current
+    val snackbarHostState = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
 
     ObserveAsEvents(viewModel.events) { event ->
         when (event) {
             is UserFeedEvent.EditUser -> onEditUser(event.id)
-            is UserFeedEvent.RefreshFailed -> snackbarController.show(event.error.toRefreshMessage())
+
+            is UserFeedEvent.RefreshFailed -> scope.launch {
+                snackbarHostState.showSnackbar(getString(event.error.toRefreshMessage()))
+            }
         }
+    }
+
+    // Shown on the screen's scope rather than this effect's, so clearing the result doesn't take the message down.
+    LaunchedEffect(formResult) {
+        if (formResult == null) return@LaunchedEffect
+        scope.launch { snackbarHostState.showSnackbar(getString(formResult.message)) }
+        onFormResultShown()
     }
 
     UndoDeleteSnackbarEffect(
         deletedUsers = state.deletedUsers,
-        snackbarController = snackbarController,
-        onUndoClick = { viewModel.onAction(UserFeedAction.OnUndoDeleteClick) },
+        snackbarHostState = snackbarHostState,
+        onUndoClick = { viewModel.onAction(UserFeedAction.OnUndoDeleteClick) }
     )
 
     // Beside the list the ViewModel shows the first user until another is picked; over it, only a tap opens one.
@@ -92,7 +110,7 @@ fun UserFeedRoot(
     NavigationBackHandler(
         state = rememberNavigationEventState(NavigationEventInfo.None),
         isBackEnabled = isOnePaneAtATime && state.openedUserId != null,
-        onBackCompleted = { viewModel.onAction(UserFeedAction.OnCloseUserClick) },
+        onBackCompleted = { viewModel.onAction(UserFeedAction.OnCloseUserClick) }
     )
 
     SliideAdaptiveListDetailLayout(
@@ -103,7 +121,7 @@ fun UserFeedRoot(
                 state = state,
                 onAction = viewModel::onAction,
                 onAddUserClick = onAddUserClick,
-                snackbarHeight = snackbarController.visibleHeight,
+                snackbarHostState = snackbarHostState
             )
         },
         detail = { userId ->
@@ -113,35 +131,30 @@ fun UserFeedRoot(
                 onClose = { viewModel.onAction(UserFeedAction.OnCloseUserClick) },
                 // The feed holds the delete back for Undo; the details close with it, so the snackbar is in view.
                 onDeleteConfirmed = { viewModel.onAction(UserFeedAction.OnDeleteRequested(it)) },
-                viewModel = koinViewModel(key = "user-detail-${userId.listKey()}") { parametersOf(userId) },
+                viewModel = koinViewModel(key = "user-detail-${userId.listKey()}") { parametersOf(userId) }
             )
         },
-        emptyDetail = { NoUserOpenedContent() },
+        emptyDetail = { NoUserOpenedContent() }
     )
 }
 
-/**
- * @param snackbarHeight How much of the bottom the app-wide snackbar covers. It is drawn above every screen rather than
- * by this [Scaffold], so the Scaffold can't lift the button over it by itself.
- */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun UserFeedScreen(
     state: UserFeedState,
     onAction: (UserFeedAction) -> Unit,
     onAddUserClick: () -> Unit,
-    snackbarHeight: Dp = 0.dp,
+    snackbarHostState: SnackbarHostState = remember { SnackbarHostState() }
 ) {
     val listState = rememberLazyListState()
     // Shrink to an icon once the list scrolls, so the button covers less of it.
     val isFabExpanded by remember { derivedStateOf { listState.firstVisibleItemIndex == 0 } }
-    val fabBottomPadding by animateDpAsState(snackbarHeight)
 
     // System back leaves Edit or Delete mode before it leaves the screen.
     NavigationBackHandler(
         state = rememberNavigationEventState(NavigationEventInfo.None),
         isBackEnabled = state.mode != FeedMode.Browse,
-        onBackCompleted = { onAction(UserFeedAction.OnExitModeClick) },
+        onBackCompleted = { onAction(UserFeedAction.OnExitModeClick) }
     )
 
     Scaffold(
@@ -150,25 +163,25 @@ fun UserFeedScreen(
                 mode = state.mode,
                 selectedCount = state.selectedIds.size,
                 canChangeMode = state.users.isNotEmpty() && !state.isRefreshing,
-                onAction = onAction,
+                onAction = onAction
             )
         },
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         floatingActionButton = {
             // Adding a user mid-selection would be confusing, so the button steps aside while a mode is active.
             AnimatedVisibility(
                 visible = state.mode == FeedMode.Browse,
                 enter = scaleIn() + fadeIn(),
-                exit = scaleOut() + fadeOut(),
-                modifier = Modifier.padding(bottom = fabBottomPadding),
+                exit = scaleOut() + fadeOut()
             ) {
                 ExtendedFloatingActionButton(
                     text = { Text(stringResource(Res.string.feed_add_user)) },
                     icon = { Icon(Icons.Default.Add, contentDescription = null) },
                     onClick = onAddUserClick,
-                    expanded = isFabExpanded,
+                    expanded = isFabExpanded
                 )
             }
-        },
+        }
     ) { innerPadding ->
         // The cached users stay on screen during a refresh, with the box's spinner above them; the new page then
         // animates in row by row. The box won't fire onRefresh again while it is refreshing.
@@ -179,7 +192,7 @@ fun UserFeedScreen(
             state = pullState,
             modifier = Modifier
                 .fillMaxSize()
-                .padding(innerPadding),
+                .padding(innerPadding)
         ) {
             // The content follows the finger, opening a gap for the indicator, holds it while refreshing and slides
             // back up afterwards. Read in the layer block, so the pull moves pixels without recomposing the list.
@@ -190,7 +203,9 @@ fun UserFeedScreen(
                 }
             when {
                 state.isLoading -> UserListPlaceholder(modifier)
+
                 state.isEmpty -> EmptyUsersContent(modifier)
+
                 else -> UserList(
                     users = state.users,
                     mode = state.mode,
@@ -199,7 +214,7 @@ fun UserFeedScreen(
                     listState = listState,
                     onUserClick = { onAction(UserFeedAction.OnUserClick(it)) },
                     onUserLongClick = { onAction(UserFeedAction.OnUserLongClick(it)) },
-                    modifier = modifier,
+                    modifier = modifier
                 )
             }
         }
@@ -212,12 +227,13 @@ fun UserFeedScreen(
             name = userToDelete.name,
             email = userToDelete.email,
             onConfirm = { onAction(UserFeedAction.OnDeleteConfirm) },
-            onDismiss = { onAction(UserFeedAction.OnDeleteDismiss) },
+            onDismiss = { onAction(UserFeedAction.OnDeleteDismiss) }
         )
+
         usersToDelete.isNotEmpty() -> DeleteUsersSheet(
             count = usersToDelete.size,
             onConfirm = { onAction(UserFeedAction.OnDeleteConfirm) },
-            onDismiss = { onAction(UserFeedAction.OnDeleteDismiss) },
+            onDismiss = { onAction(UserFeedAction.OnDeleteDismiss) }
         )
     }
 }
@@ -231,12 +247,24 @@ private fun UserFeedScreenPreview() {
                 isLoading = false,
                 users = listOf(
                     FeedUserUi(FeedUserId.Created(1), "Grace Hopper", "grace@example.com", SyncStatus.NotSynced, false),
-                    FeedUserUi(FeedUserId.Remote(2), "Alan Turing", "alan@example.com", SyncStatus.Synced(TimeAgo.JustNow), true),
-                    FeedUserUi(FeedUserId.Remote(1), "Ada Lovelace", "ada@example.com", SyncStatus.Synced(TimeAgo.Minutes(5)), true),
-                ),
+                    FeedUserUi(
+                        FeedUserId.Remote(2),
+                        "Alan Turing",
+                        "alan@example.com",
+                        SyncStatus.Synced(TimeAgo.JustNow),
+                        true
+                    ),
+                    FeedUserUi(
+                        FeedUserId.Remote(1),
+                        "Ada Lovelace",
+                        "ada@example.com",
+                        SyncStatus.Synced(TimeAgo.Minutes(5)),
+                        true
+                    )
+                )
             ),
             onAction = {},
-            onAddUserClick = {},
+            onAddUserClick = {}
         )
     }
 }
@@ -249,14 +277,26 @@ private fun UserFeedScreenDeleteModePreview() {
             state = UserFeedState(
                 isLoading = false,
                 users = listOf(
-                    FeedUserUi(FeedUserId.Remote(2), "Alan Turing", "alan@example.com", SyncStatus.Synced(TimeAgo.JustNow), true),
-                    FeedUserUi(FeedUserId.Remote(1), "Ada Lovelace", "ada@example.com", SyncStatus.Synced(TimeAgo.Minutes(5)), true),
+                    FeedUserUi(
+                        FeedUserId.Remote(2),
+                        "Alan Turing",
+                        "alan@example.com",
+                        SyncStatus.Synced(TimeAgo.JustNow),
+                        true
+                    ),
+                    FeedUserUi(
+                        FeedUserId.Remote(1),
+                        "Ada Lovelace",
+                        "ada@example.com",
+                        SyncStatus.Synced(TimeAgo.Minutes(5)),
+                        true
+                    )
                 ),
                 mode = FeedMode.Delete,
-                selectedIds = setOf(FeedUserId.Remote(1)),
+                selectedIds = setOf(FeedUserId.Remote(1))
             ),
             onAction = {},
-            onAddUserClick = {},
+            onAddUserClick = {}
         )
     }
 }
@@ -270,11 +310,17 @@ private fun UserFeedScreenRefreshingPreview() {
                 isLoading = false,
                 isRefreshing = true,
                 users = listOf(
-                    FeedUserUi(FeedUserId.Remote(1), "Ada Lovelace", "ada@example.com", SyncStatus.Synced(TimeAgo.Minutes(5)), true),
-                ),
+                    FeedUserUi(
+                        FeedUserId.Remote(1),
+                        "Ada Lovelace",
+                        "ada@example.com",
+                        SyncStatus.Synced(TimeAgo.Minutes(5)),
+                        true
+                    )
+                )
             ),
             onAction = {},
-            onAddUserClick = {},
+            onAddUserClick = {}
         )
     }
 }

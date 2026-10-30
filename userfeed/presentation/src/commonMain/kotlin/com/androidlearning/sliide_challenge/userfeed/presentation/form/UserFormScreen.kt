@@ -34,7 +34,6 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.androidlearning.sliide_challenge.core.designsystem.theme.SliideTheme
-import com.androidlearning.sliide_challenge.core.presentation.snackbar.LocalSnackbarController
 import com.androidlearning.sliide_challenge.core.presentation.util.ObserveAsEvents
 import com.androidlearning.sliide_challenge.userfeed.domain.EmailValidationError
 import com.androidlearning.sliide_challenge.userfeed.presentation.composables.UserAvatar
@@ -42,14 +41,11 @@ import com.androidlearning.sliide_challenge.userfeed.presentation.composables.Us
 import com.androidlearning.sliide_challenge.userfeed.presentation.composables.toMessage
 import com.androidlearning.sliide_challenge.userfeed.presentation.resources.Res
 import com.androidlearning.sliide_challenge.userfeed.presentation.resources.action_close
-import com.androidlearning.sliide_challenge.userfeed.presentation.resources.form_changes_saved
 import com.androidlearning.sliide_challenge.userfeed.presentation.resources.form_email_taken
 import com.androidlearning.sliide_challenge.userfeed.presentation.resources.form_submit_create
 import com.androidlearning.sliide_challenge.userfeed.presentation.resources.form_submit_save
 import com.androidlearning.sliide_challenge.userfeed.presentation.resources.form_title_edit
 import com.androidlearning.sliide_challenge.userfeed.presentation.resources.form_title_new
-import com.androidlearning.sliide_challenge.userfeed.presentation.resources.form_user_added
-import com.androidlearning.sliide_challenge.userfeed.presentation.resources.form_user_not_found
 import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.viewmodel.koinViewModel
 import org.koin.core.parameter.parametersOf
@@ -58,53 +54,53 @@ import org.koin.core.parameter.parametersOf
 fun UserFormRoot(
     mode: UserFormMode,
     onNavigateBack: () -> Unit,
-    viewModel: UserFormViewModel = koinViewModel { parametersOf(mode) },
+    onFinished: (UserFormResult) -> Unit,
+    viewModel: UserFormViewModel = koinViewModel { parametersOf(mode) }
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
-    val snackbarController = LocalSnackbarController.current
 
-    // The snackbar host sits above the navigation, so the message stays up after the form closes.
     ObserveAsEvents(viewModel.events) { event ->
-        val message = when (event) {
-            UserFormEvent.Saved -> if (mode is UserFormMode.Create) Res.string.form_user_added else Res.string.form_changes_saved
-            UserFormEvent.UserNotFound -> Res.string.form_user_not_found
+        val result = when (event) {
+            UserFormEvent.Saved -> when (mode) {
+                UserFormMode.Create -> UserFormResult.USER_ADDED
+                is UserFormMode.Edit -> UserFormResult.CHANGES_SAVED
+            }
+
+            UserFormEvent.UserNotFound -> UserFormResult.USER_NOT_FOUND
         }
-        snackbarController.show(message)
-        onNavigateBack()
+        onFinished(result)
     }
 
     UserFormScreen(
         state = state,
         onAction = viewModel::onAction,
-        onCloseClick = onNavigateBack,
+        onCloseClick = onNavigateBack
     )
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun UserFormScreen(
-    state: UserFormState,
-    onAction: (UserFormAction) -> Unit,
-    onCloseClick: () -> Unit,
-) {
+fun UserFormScreen(state: UserFormState, onAction: (UserFormAction) -> Unit, onCloseClick: () -> Unit) {
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(stringResource(if (state.isEditing) Res.string.form_title_edit else Res.string.form_title_new)) },
+                title = {
+                    Text(stringResource(if (state.isEditing) Res.string.form_title_edit else Res.string.form_title_new))
+                },
                 navigationIcon = {
                     // Closing mid-save would hide a "email already taken" reply, so wait for the save to finish.
                     IconButton(onClick = onCloseClick, enabled = !state.isSaving) {
                         Icon(Icons.Default.Close, contentDescription = stringResource(Res.string.action_close))
                     }
-                },
+                }
             )
-        },
+        }
     ) { innerPadding ->
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
-                .imePadding(),
+                .imePadding()
         ) {
             if (state.isLoading) {
                 LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
@@ -118,7 +114,7 @@ fun UserFormScreen(
                     .verticalScroll(rememberScrollState())
                     .padding(horizontal = 24.dp, vertical = 16.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 UserAvatar()
                 Spacer(modifier = Modifier.height(8.dp))
@@ -138,14 +134,16 @@ fun UserFormScreen(
                     onEmailChange = { onAction(UserFormAction.OnEmailChange(it)) },
                     onNameFocusLost = { onAction(UserFormAction.OnNameFocusLost) },
                     onEmailFocusLost = { onAction(UserFormAction.OnEmailFocusLost) },
-                    onDone = { onAction(UserFormAction.OnSubmitClick) },
+                    onDone = { onAction(UserFormAction.OnSubmitClick) }
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 SubmitButton(
-                    text = stringResource(if (state.isEditing) Res.string.form_submit_save else Res.string.form_submit_create),
+                    text = stringResource(
+                        if (state.isEditing) Res.string.form_submit_save else Res.string.form_submit_create
+                    ),
                     isSaving = state.isSaving,
                     enabled = state.canSubmit,
-                    onClick = { onAction(UserFormAction.OnSubmitClick) },
+                    onClick = { onAction(UserFormAction.OnSubmitClick) }
                 )
             }
         }
@@ -153,25 +151,20 @@ fun UserFormScreen(
 }
 
 @Composable
-private fun SubmitButton(
-    text: String,
-    isSaving: Boolean,
-    enabled: Boolean,
-    onClick: () -> Unit,
-) {
+private fun SubmitButton(text: String, isSaving: Boolean, enabled: Boolean, onClick: () -> Unit) {
     Button(
         onClick = onClick,
         enabled = enabled,
         modifier = Modifier
             .fillMaxWidth()
-            .height(52.dp),
+            .height(52.dp)
     ) {
         Crossfade(targetState = isSaving) { saving ->
             if (saving) {
                 CircularProgressIndicator(
                     modifier = Modifier.size(24.dp),
                     strokeWidth = 2.dp,
-                    color = MaterialTheme.colorScheme.onSurface,
+                    color = MaterialTheme.colorScheme.onSurface
                 )
             } else {
                 Text(text)
@@ -199,10 +192,10 @@ private fun UserFormScreenErrorsPreview() {
                 nameError = null,
                 emailError = EmailValidationError.INVALID_FORMAT,
                 isNameTouched = true,
-                isEmailTouched = true,
+                isEmailTouched = true
             ),
             onAction = {},
-            onCloseClick = {},
+            onCloseClick = {}
         )
     }
 }
@@ -218,10 +211,10 @@ private fun UserFormScreenEditSavingPreview() {
                 name = "Grace Hopper",
                 email = "grace@example.com",
                 nameError = null,
-                emailError = null,
+                emailError = null
             ),
             onAction = {},
-            onCloseClick = {},
+            onCloseClick = {}
         )
     }
 }
