@@ -36,6 +36,7 @@ import androidx.navigationevent.compose.rememberNavigationEventState
 import com.androidlearning.sliide_challenge.core.designsystem.components.layouts.SliideAdaptiveListDetailLayout
 import com.androidlearning.sliide_challenge.core.designsystem.components.layouts.showsListDetailOnePaneAtATime
 import com.androidlearning.sliide_challenge.core.designsystem.theme.SliideTheme
+import com.androidlearning.sliide_challenge.core.presentation.splash.StartupState
 import com.androidlearning.sliide_challenge.core.presentation.util.ObserveAsEvents
 import com.androidlearning.sliide_challenge.core.presentation.util.currentDeviceConfiguration
 import com.androidlearning.sliide_challenge.userfeed.domain.FeedUserId
@@ -61,11 +62,13 @@ import org.koin.core.parameter.parametersOf
  * side (see [SliideAdaptiveListDetailLayout]). Both arrangements are one destination, so turning the device mid-edit
  * keeps the edit: each user's details ViewModel lives in this destination, keyed by the user.
  *
+ * @param startupState How the app's start is going; the feed shimmers while it loads and reports a failure once.
  * @param formResult Why the user form last closed itself, to announce here since the form is gone. Cleared through
  * [onFormResultShown] once it is on its way, so it shows once.
  */
 @Composable
 fun UserFeedRoot(
+    startupState: StartupState,
     onAddUserClick: () -> Unit,
     onEditUser: (FeedUserId) -> Unit,
     formResult: UserFormResult? = null,
@@ -77,6 +80,10 @@ fun UserFeedRoot(
     val isOnePaneAtATime = configuration.showsListDetailOnePaneAtATime
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
+
+    LaunchedEffect(startupState) {
+        viewModel.onAction(UserFeedAction.OnStartupStateChange(startupState))
+    }
 
     ObserveAsEvents(viewModel.events) { event ->
         when (event) {
@@ -204,7 +211,11 @@ fun UserFeedScreen(
             when {
                 state.isLoading -> UserListPlaceholder(modifier)
 
-                state.isEmpty -> EmptyUsersContent(modifier)
+                state.isEmpty -> EmptyUsersContent(
+                    onRetryClick = { onAction(UserFeedAction.OnRefresh) },
+                    loadError = state.loadError,
+                    modifier = modifier
+                )
 
                 else -> UserList(
                     users = state.users,

@@ -14,11 +14,7 @@ import kotlinx.coroutines.withContext
  * same frame it is sent, so one sent just before the screen stops is handled rather than lost.
  */
 @Composable
-fun <T> ObserveAsEvents(
-    flow: Flow<T>,
-    key1: Any? = null,
-    onEvent: (T) -> Unit,
-) {
+fun <T> ObserveAsEvents(flow: Flow<T>, key1: Any? = null, onEvent: (T) -> Unit) {
     val lifecycleOwner = LocalLifecycleOwner.current
     LaunchedEffect(lifecycleOwner.lifecycle, key1, flow) {
         lifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {

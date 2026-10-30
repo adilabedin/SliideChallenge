@@ -1,5 +1,6 @@
 package com.androidlearning.sliide_challenge.userfeed.presentation.feed
 
+import com.androidlearning.sliide_challenge.core.presentation.splash.StartupState
 import com.androidlearning.sliide_challenge.userfeed.domain.FeedUserId
 
 sealed interface UserFeedAction {
@@ -39,4 +40,7 @@ sealed interface UserFeedAction {
      * like one confirmed here, so the feed can offer Undo once the user is back on it.
      */
     data class OnDeleteRequested(val id: FeedUserId) : UserFeedAction
+
+    /** How the app's start is going; the feed shimmers while it loads and reports a failed first load once. */
+    data class OnStartupStateChange(val startupState: StartupState) : UserFeedAction
 }

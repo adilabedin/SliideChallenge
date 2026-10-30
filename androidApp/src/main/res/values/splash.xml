@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Keep in sync with SplashBackground (designsystem) and iOS LaunchBackground. -->
+    <!-- Keep in sync with the iOS LaunchBackground colour. -->
     <color name="splash_background">#141A2E</color>
 
     <style name="Theme.Sliide.Starting" parent="Theme.SplashScreen">

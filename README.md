@@ -158,12 +158,12 @@ test name in the message, and a badly formatted `commonMain` file produced a `bl
 ### Loading users (launch screen → feed)
 
 - **Flow:** `App()` → `MainViewModel` → `MainRepository` → `MainApi` → Ktor `HttpClient`. There is no splash
-  *route*: `App()` shows `SplashContent` while `MainViewModel.isLoading`, then crossfades to `NavigationRoot` (feed).
-- **Android** keeps the system splash (`core-splashscreen`) up via `setKeepOnScreenCondition { isLoading }`;
-  `MainActivity` passes its `MainViewModel` into `App()` so both observe the same state.
-- **iOS** launch screens are static and can't be held, so `UILaunchScreen` (`LaunchBackground` + `LaunchLogo`, 160pt)
-  is followed by `SplashContent`, which draws the same colour and logo at the same size — users see one continuous
-  splash.
+  route or splash composable: each platform shows its own native launch screen, and the feed covers the rest.
+- **Android** keeps the system splash (`core-splashscreen`) up via
+  `setKeepOnScreenCondition { startupState == Loading }`; `MainActivity` passes its `MainViewModel` into `App()` so
+  the splash and the feed observe the same state.
+- **iOS** launch screens (`UILaunchScreen`: `LaunchBackground` + `LaunchLogo`) are static and can't be held: iOS
+  removes them on the first frame. The feed then shows its shimmer until the first page is in.
 - **Contracts:** `User` and `MainRepository` live in `:core:domain`; `UserDto` (`@Serializable`), the `toDomain()`
   mapper, `MainApi`, `KtorMainApi` and `OfflineFirstMainRepository` live in `:core:data`, so serialization types never leak
   into domain or presentation.
@@ -175,9 +175,20 @@ test name in the message, and a badly formatted `commonMain` file produced a `bl
   page and swaps it into the table with `UserDao.replaceAll()` (one transaction), so the table always holds exactly that
   page and needs no local pagination. `observeUsers()` only ever reads the database. A failed fetch leaves the cache
   untouched.
-- **Startup:** `MainViewModel` only calls the network when the database is empty. With cached users it skips the
-  fetch entirely and opens the feed; if the fetch fails, the feed opens on its empty state. `MainViewModel` exposes
-  a single `isLoading: StateFlow<Boolean>` (no state class), set to `false` once startup is done.
+- **Startup:** `MainViewModel` only calls the network when the database is empty, and exposes
+  `startupState: StateFlow<StartupState>` (`Loading`, `Loaded`, `Error`), where `Error` means nothing was cached and
+  the load failed. `App()` hands the flow to `NavigationRoot`, which reads it inside the feed destination (so its
+  changes don't rebuild the nav graph), and `UserFeedRoot` forwards each value to `UserFeedViewModel` as
+  `OnStartupStateChange`. While `Loading`, an empty feed shimmers (users created on this device still show) and a
+  pull is ignored, since the page is already being fetched. On `Error` the feed says so once, without fetching
+  again: the empty state shows "Couldn't load users" with a **Try again** button, or, over created users, the usual
+  refresh snackbar. The ViewModel remembers the last state it handled, so one re-sent after a rotation isn't
+  reported twice.
+  *Trade-offs:* no shared splash composable. Android already holds its system splash, and on iOS the shimmer is the
+  loading state, so a composable copy of the launch screen would only duplicate one or the other. The error is shown
+  in the feed rather than on an app-level error screen, which would block an app that works offline (users can still
+  be added). A plain enum doesn't say why the load failed, so the startup message is a generic one; a retry reports
+  the actual reason ("No internet connection…").
 - **Feed:** `UserFeedViewModel` observes `UserFeedRepository.observeUsers()` and shows the list (name, email and sync
   status), or an empty-data state when there are no users.
 - **Pull to refresh + shimmer:** pulling the feed down calls `UserFeedRepository.refreshUsers()`, which first sends
@@ -189,8 +200,9 @@ test name in the message, and a badly formatted `commonMain` file produced a `bl
   page animates in row by row (`animateItem()`) instead of the whole list being torn down and rebuilt. The list slides
   down with the finger (`graphicsLayer` translation from `PullToRefreshState.distanceFraction`), holds the gap while
   refreshing and springs back afterwards. A failed refresh keeps the cached users and
-  shows a snackbar ("No internet connection. Showing saved users."). The empty state is a one-item `LazyColumn`, so it
-  can be pulled too, e.g. after an offline first launch.
+  shows a snackbar ("No internet connection. Showing saved users."); with no users on screen the error goes in the
+  empty state instead (`UserFeedState.loadError`). The empty state is a one-item `LazyColumn`, so it can be pulled
+  too, e.g. after an offline first launch.
 - **Relative timestamp = last sync.** Each row reads "Synced 5 minutes ago", or "Not synced" while it has a create or
   edit waiting in the pending-sync queue. `users.lastSyncedAt` is stamped by a refresh and by a successful PATCH;
   `created_users.lastSyncedAt` by the 201 and by a successful PATCH. `FeedUser.lastSyncedAt` is null whenever a change

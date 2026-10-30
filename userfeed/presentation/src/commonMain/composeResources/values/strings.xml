@@ -9,6 +9,11 @@
     <string name="feed_loading_users">Loading users</string>
     <string name="feed_empty_title">No users yet</string>
     <string name="feed_empty_message">Pull down to refresh, or add a user.</string>
+    <string name="feed_load_error_title">Couldn't load users</string>
+    <string name="feed_load_error_no_internet">No internet connection. Check your connection and try again, or add a user.</string>
+    <string name="feed_load_error_timeout">The server took too long to respond. Try again, or add a user.</string>
+    <string name="feed_load_error_unknown">Something went wrong. Try again, or add a user.</string>
+    <string name="feed_retry">Try again</string>
     <string name="feed_no_user_opened_title">No user to show</string>
     <string name="feed_no_user_opened_message">Add a user and their details will appear here.</string>
     <string name="feed_more_options">More options</string>

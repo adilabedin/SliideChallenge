@@ -1,11 +1,14 @@
 package com.androidlearning.sliide_challenge.userfeed.presentation.feed
 
+import com.androidlearning.sliide_challenge.core.domain.util.DataError
 import com.androidlearning.sliide_challenge.userfeed.domain.FeedUserId
 
 data class UserFeedState(
     /** True until the database's first emission, so the empty state doesn't flash on open. */
     val isLoading: Boolean = true,
     val users: List<FeedUserUi> = emptyList(),
+    /** Why the feed is empty: a fetch failed while there were no users to show. Cleared by the next good fetch. */
+    val loadError: DataError.Network? = null,
     /** True while a pull-to-refresh fetches the last GoRest page; the cached users stay on screen under the spinner. */
     val isRefreshing: Boolean = false,
     /** What tapping a row does, picked from the app bar's overflow menu. */
@@ -22,7 +25,7 @@ data class UserFeedState(
     /** Users whose delete is waiting for confirmation in the bottom sheet. */
     val usersToDelete: List<FeedUserUi> = emptyList(),
     /** Deleted users, already hidden from [users], whose delete can still be undone; it is sent once Undo expires. */
-    val deletedUsers: List<FeedUserUi> = emptyList(),
+    val deletedUsers: List<FeedUserUi> = emptyList()
 ) {
     val isEmpty: Boolean get() = !isLoading && users.isEmpty()
 }
@@ -35,5 +38,5 @@ enum class FeedMode {
     Edit,
 
     /** Tapping a row ticks it, so several users can be deleted at once. */
-    Delete,
+    Delete
 }

@@ -28,15 +28,14 @@ enum class DeviceConfiguration {
          * and a short one that is wider is a phone on its side. Only then do the medium and expanded widths split
          * tablets from desktops, so a small phone in landscape or a half-open foldable is never taken for a desktop.
          */
-        fun fromWindowSizeClass(windowSizeClass: WindowSizeClass): DeviceConfiguration =
-            with(windowSizeClass) {
-                when {
-                    minWidthDp < WIDTH_DP_MEDIUM_LOWER_BOUND -> MOBILE_PORTRAIT
-                    minHeightDp < HEIGHT_DP_MEDIUM_LOWER_BOUND -> MOBILE_LANDSCAPE
-                    minWidthDp < WIDTH_DP_EXPANDED_LOWER_BOUND -> TABLET_PORTRAIT
-                    minHeightDp < HEIGHT_DP_EXPANDED_LOWER_BOUND -> TABLET_LANDSCAPE
-                    else -> DESKTOP
-                }
+        fun fromWindowSizeClass(windowSizeClass: WindowSizeClass): DeviceConfiguration = with(windowSizeClass) {
+            when {
+                minWidthDp < WIDTH_DP_MEDIUM_LOWER_BOUND -> MOBILE_PORTRAIT
+                minHeightDp < HEIGHT_DP_MEDIUM_LOWER_BOUND -> MOBILE_LANDSCAPE
+                minWidthDp < WIDTH_DP_EXPANDED_LOWER_BOUND -> TABLET_PORTRAIT
+                minHeightDp < HEIGHT_DP_EXPANDED_LOWER_BOUND -> TABLET_LANDSCAPE
+                else -> DESKTOP
             }
+        }
     }
 }

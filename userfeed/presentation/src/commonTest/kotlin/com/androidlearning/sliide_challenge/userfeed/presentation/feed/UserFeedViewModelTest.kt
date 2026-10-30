@@ -1,5 +1,9 @@
 package com.androidlearning.sliide_challenge.userfeed.presentation.feed
 
+import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.ViewModelStore
+import androidx.lifecycle.viewmodel.initializer
+import androidx.lifecycle.viewmodel.viewModelFactory
 import app.cash.turbine.test
 import assertk.assertThat
 import assertk.assertions.containsExactly
@@ -9,16 +13,21 @@ import assertk.assertions.isEqualTo
 import assertk.assertions.isFalse
 import assertk.assertions.isNull
 import assertk.assertions.isTrue
-import androidx.lifecycle.ViewModelProvider
-import androidx.lifecycle.ViewModelStore
-import androidx.lifecycle.viewmodel.initializer
-import androidx.lifecycle.viewmodel.viewModelFactory
 import com.androidlearning.sliide_challenge.core.domain.util.ApplicationScope
 import com.androidlearning.sliide_challenge.core.domain.util.DataError
 import com.androidlearning.sliide_challenge.core.domain.util.Result
+import com.androidlearning.sliide_challenge.core.presentation.splash.StartupState
 import com.androidlearning.sliide_challenge.userfeed.domain.FeedUser
 import com.androidlearning.sliide_challenge.userfeed.domain.FeedUserId
 import com.androidlearning.sliide_challenge.userfeed.presentation.FakeUserFeedRepository
+import kotlin.test.AfterTest
+import kotlin.test.BeforeTest
+import kotlin.test.Test
+import kotlin.time.Clock
+import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.Duration.Companion.minutes
+import kotlin.time.Duration.Companion.seconds
+import kotlin.time.Instant
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -29,14 +38,6 @@ import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
-import kotlin.test.AfterTest
-import kotlin.test.BeforeTest
-import kotlin.test.Test
-import kotlin.time.Clock
-import kotlin.time.Duration.Companion.milliseconds
-import kotlin.time.Duration.Companion.minutes
-import kotlin.time.Duration.Companion.seconds
-import kotlin.time.Instant
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class UserFeedViewModelTest {
@@ -63,14 +64,124 @@ class UserFeedViewModelTest {
         Dispatchers.resetMain()
     }
 
+    /** Started up as [startupState] by default, like the screen does on its first composition. */
+    private fun TestScope.viewModel(startupState: StartupState? = StartupState.Loaded) =
+        UserFeedViewModel(repository, applicationScope(), clock).apply {
+            if (startupState != null) onAction(UserFeedAction.OnStartupStateChange(startupState))
+        }
+
     @Test
-    fun `empty cache shows the empty state`() = runTest {
-        val viewModel = UserFeedViewModel(repository, applicationScope(), clock)
+    fun `empty cache shows the empty state once started`() = runTest {
+        val viewModel = viewModel()
 
         viewModel.state.test {
             val state = awaitItem()
             assertThat(state.isLoading).isFalse()
             assertThat(state.isEmpty).isTrue()
+            assertThat(state.loadError).isNull()
+        }
+    }
+
+    @Test
+    fun `an empty feed shimmers while the first page loads`() = runTest {
+        val viewModel = viewModel(StartupState.Loading)
+
+        viewModel.state.test {
+            assertThat(awaitItem().isLoading).isTrue()
+
+            viewModel.onAction(UserFeedAction.OnStartupStateChange(StartupState.Loaded))
+            assertThat(awaitItem().isEmpty).isTrue()
+        }
+    }
+
+    @Test
+    fun `the feed shimmers until the screen passes on the startup state`() = runTest {
+        val viewModel = viewModel(startupState = null)
+
+        viewModel.state.test {
+            assertThat(awaitItem().isLoading).isTrue()
+        }
+    }
+
+    @Test
+    fun `users created on this device show while the first page loads`() = runTest {
+        repository.users.value = listOf(FeedUser(FeedUserId.Created(1), "Alan", "alan@x.io", lastSyncedAt = null))
+        val viewModel = viewModel(StartupState.Loading)
+
+        viewModel.state.test {
+            val state = awaitItem()
+            assertThat(state.isLoading).isFalse()
+            assertThat(state.users.map { it.id }).containsExactly(FeedUserId.Created(1))
+        }
+    }
+
+    @Test
+    fun `a pull while the first page loads is ignored`() = runTest {
+        val viewModel = viewModel(StartupState.Loading)
+
+        viewModel.onAction(UserFeedAction.OnRefresh)
+
+        assertThat(repository.refreshCalls).isEqualTo(0)
+    }
+
+    @Test
+    fun `a failed startup shows the error in the empty state without fetching again`() = runTest {
+        val viewModel = viewModel(StartupState.Loading)
+
+        viewModel.events.test {
+            viewModel.state.test {
+                assertThat(awaitItem().isLoading).isTrue()
+
+                viewModel.onAction(UserFeedAction.OnStartupStateChange(StartupState.Error))
+                val state = expectMostRecentItem()
+                assertThat(state.isEmpty).isTrue()
+                assertThat(state.loadError).isEqualTo(DataError.Network.UNKNOWN)
+            }
+            expectNoEvents()
+        }
+        assertThat(repository.refreshCalls).isEqualTo(0)
+    }
+
+    @Test
+    fun `a failed startup over created users shows a snackbar instead`() = runTest {
+        repository.users.value = listOf(FeedUser(FeedUserId.Created(1), "Alan", "alan@x.io", lastSyncedAt = null))
+        val viewModel = viewModel(startupState = null)
+
+        viewModel.events.test {
+            viewModel.onAction(UserFeedAction.OnStartupStateChange(StartupState.Error))
+            assertThat(awaitItem()).isEqualTo(UserFeedEvent.RefreshFailed(DataError.Network.UNKNOWN))
+        }
+        assertThat(viewModel.state.value.loadError).isNull()
+    }
+
+    @Test
+    fun `a startup error sent again after a rotation is not reported twice`() = runTest {
+        repository.users.value = listOf(FeedUser(FeedUserId.Created(1), "Alan", "alan@x.io", lastSyncedAt = null))
+        val viewModel = viewModel(startupState = null)
+
+        viewModel.events.test {
+            viewModel.onAction(UserFeedAction.OnStartupStateChange(StartupState.Error))
+            awaitItem()
+
+            viewModel.onAction(UserFeedAction.OnStartupStateChange(StartupState.Error))
+            expectNoEvents()
+        }
+    }
+
+    @Test
+    fun `retrying after a failed startup reports the reason then clears it once a fetch works`() = runTest {
+        repository.refreshResult = Result.Error(DataError.Network.NO_INTERNET)
+        val viewModel = viewModel(StartupState.Error)
+
+        viewModel.state.test {
+            assertThat(awaitItem().loadError).isEqualTo(DataError.Network.UNKNOWN)
+
+            viewModel.onAction(UserFeedAction.OnRefresh)
+            assertThat(expectMostRecentItem().loadError).isEqualTo(DataError.Network.NO_INTERNET)
+
+            repository.refreshResult = Result.Success(Unit)
+            viewModel.onAction(UserFeedAction.OnRefresh)
+            assertThat(expectMostRecentItem().loadError).isNull()
         }
     }
 
@@ -79,17 +190,25 @@ class UserFeedViewModelTest {
         val ada = FeedUser(FeedUserId.Remote(1), "Ada", "ada@x.io", lastSyncedAt = clock.now)
         val alan = FeedUser(FeedUserId.Created(1), "Alan", "alan@x.io", lastSyncedAt = null)
         repository.users.value = listOf(ada)
-        val viewModel = UserFeedViewModel(repository, applicationScope(), clock)
+        val viewModel = viewModel()
 
         viewModel.state.test {
             assertThat(awaitItem().users).isEqualTo(
-                listOf(FeedUserUi(FeedUserId.Remote(1), "Ada", "ada@x.io", SyncStatus.Synced(TimeAgo.JustNow), isSynced = true)),
+                listOf(
+                    FeedUserUi(
+                        FeedUserId.Remote(1),
+                        "Ada",
+                        "ada@x.io",
+                        SyncStatus.Synced(TimeAgo.JustNow),
+                        isSynced = true
+                    )
+                )
             )
 
             repository.users.value = listOf(alan)
             val updated = awaitItem()
             assertThat(updated.users).isEqualTo(
-                listOf(FeedUserUi(FeedUserId.Created(1), "Alan", "alan@x.io", SyncStatus.NotSynced, isSynced = false)),
+                listOf(FeedUserUi(FeedUserId.Created(1), "Alan", "alan@x.io", SyncStatus.NotSynced, isSynced = false))
             )
             assertThat(updated.isEmpty).isFalse()
         }
@@ -98,7 +217,7 @@ class UserFeedViewModelTest {
     @Test
     fun `sync times move on each minute while the feed is observed`() = runTest {
         repository.users.value = listOf(FeedUser(FeedUserId.Remote(1), "Ada", "ada@x.io", lastSyncedAt = clock.now))
-        val viewModel = UserFeedViewModel(repository, applicationScope(), clock)
+        val viewModel = viewModel()
 
         viewModel.state.test {
             assertThat(awaitItem().users.single().syncStatus).isEqualTo(SyncStatus.Synced(TimeAgo.JustNow))
@@ -117,7 +236,7 @@ class UserFeedViewModelTest {
     @Test
     fun `long press asks for confirmation and dismissing it deletes nothing`() = runTest {
         repository.users.value = listOf(ada)
-        val viewModel = UserFeedViewModel(repository, applicationScope(), clock)
+        val viewModel = viewModel()
 
         viewModel.state.test {
             awaitItem()
@@ -135,7 +254,7 @@ class UserFeedViewModelTest {
     @Test
     fun `confirmed delete hides the user at once and is sent when undo expires`() = runTest {
         repository.users.value = listOf(alan, ada)
-        val viewModel = UserFeedViewModel(repository, applicationScope(), clock)
+        val viewModel = viewModel()
 
         viewModel.state.test {
             awaitItem()
@@ -162,7 +281,7 @@ class UserFeedViewModelTest {
         val store = ViewModelStore()
         val viewModel = ViewModelProvider.create(
             store,
-            viewModelFactory { initializer { UserFeedViewModel(repository, applicationScope(), clock) } },
+            viewModelFactory { initializer { UserFeedViewModel(repository, applicationScope(), clock) } }
         )[UserFeedViewModel::class]
         viewModel.onAction(UserFeedAction.OnUserLongClick(ada.ui()))
         viewModel.onAction(UserFeedAction.OnDeleteConfirm)
@@ -176,7 +295,7 @@ class UserFeedViewModelTest {
     @Test
     fun `undo restores the user and never sends the delete`() = runTest {
         repository.users.value = listOf(alan, ada)
-        val viewModel = UserFeedViewModel(repository, applicationScope(), clock)
+        val viewModel = viewModel()
 
         viewModel.state.test {
             awaitItem()
@@ -195,7 +314,7 @@ class UserFeedViewModelTest {
     @Test
     fun `a second delete sends the first one straight away`() = runTest {
         repository.users.value = listOf(alan, ada)
-        val viewModel = UserFeedViewModel(repository, applicationScope(), clock)
+        val viewModel = viewModel()
 
         viewModel.state.test {
             awaitItem()
@@ -216,7 +335,7 @@ class UserFeedViewModelTest {
     @Test
     fun `a delete confirmed on another screen gets the same undo window`() = runTest {
         repository.users.value = listOf(alan, ada)
-        val viewModel = UserFeedViewModel(repository, applicationScope(), clock)
+        val viewModel = viewModel()
 
         viewModel.state.test {
             awaitItem()
@@ -239,7 +358,7 @@ class UserFeedViewModelTest {
     @Test
     fun `a delete requested for a user who is already gone does nothing`() = runTest {
         repository.users.value = listOf(alan)
-        val viewModel = UserFeedViewModel(repository, applicationScope(), clock)
+        val viewModel = viewModel()
 
         viewModel.state.test {
             awaitItem()
@@ -251,7 +370,7 @@ class UserFeedViewModelTest {
     @Test
     fun `tapping a user while browsing opens their details and closing them goes back`() = runTest {
         repository.users.value = listOf(alan, ada)
-        val viewModel = UserFeedViewModel(repository, applicationScope(), clock)
+        val viewModel = viewModel()
 
         viewModel.events.test {
             viewModel.state.test {
@@ -273,7 +392,7 @@ class UserFeedViewModelTest {
     @Test
     fun `beside the list the first user is shown until another is picked`() = runTest {
         repository.users.value = listOf(alan, ada)
-        val viewModel = UserFeedViewModel(repository, applicationScope(), clock)
+        val viewModel = viewModel()
 
         viewModel.state.test {
             assertThat(awaitItem().openedUserId).isNull()
@@ -288,7 +407,7 @@ class UserFeedViewModelTest {
     @Test
     fun `over the list nothing opens until a user is tapped`() = runTest {
         repository.users.value = listOf(alan, ada)
-        val viewModel = UserFeedViewModel(repository, applicationScope(), clock)
+        val viewModel = viewModel()
 
         viewModel.state.test {
             awaitItem()
@@ -304,7 +423,7 @@ class UserFeedViewModelTest {
     @Test
     fun `beside the list deleting the shown user shows the next first user`() = runTest {
         repository.users.value = listOf(alan, ada)
-        val viewModel = UserFeedViewModel(repository, applicationScope(), clock)
+        val viewModel = viewModel()
 
         viewModel.state.test {
             awaitItem()
@@ -316,7 +435,7 @@ class UserFeedViewModelTest {
 
     @Test
     fun `beside an empty list nothing is shown`() = runTest {
-        val viewModel = UserFeedViewModel(repository, applicationScope(), clock)
+        val viewModel = viewModel()
 
         viewModel.state.test {
             awaitItem()
@@ -328,7 +447,7 @@ class UserFeedViewModelTest {
     @Test
     fun `tapping a user outside browsing does not open their details`() = runTest {
         repository.users.value = listOf(ada)
-        val viewModel = UserFeedViewModel(repository, applicationScope(), clock)
+        val viewModel = viewModel()
 
         viewModel.state.test {
             awaitItem()
@@ -343,7 +462,7 @@ class UserFeedViewModelTest {
     @Test
     fun `deleting the opened user closes their details and undo does not reopen them`() = runTest {
         repository.users.value = listOf(alan, ada)
-        val viewModel = UserFeedViewModel(repository, applicationScope(), clock)
+        val viewModel = viewModel()
 
         viewModel.state.test {
             awaitItem()
@@ -361,7 +480,7 @@ class UserFeedViewModelTest {
     @Test
     fun `deleting another user keeps the opened user's details`() = runTest {
         repository.users.value = listOf(alan, ada)
-        val viewModel = UserFeedViewModel(repository, applicationScope(), clock)
+        val viewModel = viewModel()
 
         viewModel.state.test {
             awaitItem()
@@ -375,7 +494,7 @@ class UserFeedViewModelTest {
     @Test
     fun `an opened user who leaves the cache is no longer opened`() = runTest {
         repository.users.value = listOf(alan, ada)
-        val viewModel = UserFeedViewModel(repository, applicationScope(), clock)
+        val viewModel = viewModel()
 
         viewModel.state.test {
             awaitItem()
@@ -390,7 +509,7 @@ class UserFeedViewModelTest {
     @Test
     fun `edit mode opens the tapped user and returns to browsing`() = runTest {
         repository.users.value = listOf(ada)
-        val viewModel = UserFeedViewModel(repository, applicationScope(), clock)
+        val viewModel = viewModel()
 
         viewModel.events.test {
             viewModel.state.test {
@@ -408,7 +527,7 @@ class UserFeedViewModelTest {
     @Test
     fun `delete mode toggles selection and leaving it clears the selection`() = runTest {
         repository.users.value = listOf(alan, ada)
-        val viewModel = UserFeedViewModel(repository, applicationScope(), clock)
+        val viewModel = viewModel()
 
         viewModel.state.test {
             awaitItem()
@@ -430,7 +549,7 @@ class UserFeedViewModelTest {
     @Test
     fun `long press only asks to delete while browsing`() = runTest {
         repository.users.value = listOf(ada)
-        val viewModel = UserFeedViewModel(repository, applicationScope(), clock)
+        val viewModel = viewModel()
 
         viewModel.state.test {
             awaitItem()
@@ -445,7 +564,7 @@ class UserFeedViewModelTest {
     fun `deleting the selection hides every selected user and undo brings them all back`() = runTest {
         val grace = FeedUser(FeedUserId.Remote(2), "Grace", "grace@x.io", lastSyncedAt = null)
         repository.users.value = listOf(alan, grace, ada)
-        val viewModel = UserFeedViewModel(repository, applicationScope(), clock)
+        val viewModel = viewModel()
 
         viewModel.state.test {
             awaitItem()
@@ -472,7 +591,7 @@ class UserFeedViewModelTest {
     @Test
     fun `deleting the selection sends every delete when undo expires`() = runTest {
         repository.users.value = listOf(alan, ada)
-        val viewModel = UserFeedViewModel(repository, applicationScope(), clock)
+        val viewModel = viewModel()
 
         viewModel.state.test {
             awaitItem()
@@ -493,7 +612,7 @@ class UserFeedViewModelTest {
     @Test
     fun `dismissing the confirmation keeps the selection`() = runTest {
         repository.users.value = listOf(ada)
-        val viewModel = UserFeedViewModel(repository, applicationScope(), clock)
+        val viewModel = viewModel()
 
         viewModel.state.test {
             awaitItem()
@@ -513,9 +632,10 @@ class UserFeedViewModelTest {
 
     @Test
     fun `refresh is reported until the fetch finishes`() = runTest {
+        repository.users.value = listOf(FeedUser(FeedUserId.Remote(1), "Ada", "ada@x.io", lastSyncedAt = clock.now))
         val pending = CompletableDeferred<Unit>()
         repository.pendingRefresh = pending
-        val viewModel = UserFeedViewModel(repository, applicationScope(), clock)
+        val viewModel = viewModel()
 
         viewModel.state.test {
             assertThat(awaitItem().isRefreshing).isFalse()
@@ -531,8 +651,9 @@ class UserFeedViewModelTest {
 
     @Test
     fun `a pull while refreshing is ignored`() = runTest {
+        repository.users.value = listOf(FeedUser(FeedUserId.Remote(1), "Ada", "ada@x.io", lastSyncedAt = clock.now))
         repository.pendingRefresh = CompletableDeferred()
-        val viewModel = UserFeedViewModel(repository, applicationScope(), clock)
+        val viewModel = viewModel()
 
         viewModel.state.test {
             awaitItem()
@@ -549,7 +670,7 @@ class UserFeedViewModelTest {
         val ada = FeedUser(FeedUserId.Remote(1), "Ada", "ada@x.io", lastSyncedAt = clock.now)
         repository.users.value = listOf(ada)
         repository.refreshResult = Result.Error(DataError.Network.NO_INTERNET)
-        val viewModel = UserFeedViewModel(repository, applicationScope(), clock)
+        val viewModel = viewModel()
 
         viewModel.events.test {
             viewModel.state.test {
