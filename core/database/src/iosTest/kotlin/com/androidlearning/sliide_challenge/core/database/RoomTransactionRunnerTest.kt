@@ -8,11 +8,11 @@ import assertk.assertions.isEmpty
 import assertk.assertions.isEqualTo
 import com.androidlearning.sliide_challenge.core.database.user.CreateUserPendingSyncEntity
 import com.androidlearning.sliide_challenge.core.database.user.CreatedUserEntity
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.test.runTest
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.test.runTest
 
 class RoomTransactionRunnerTest {
 
@@ -55,7 +55,7 @@ class RoomTransactionRunnerTest {
     /** Writes to two tables through two DAOs, as the repository does. */
     private suspend fun writeUserAndQueueEntry(): Long {
         val localId = database.createdUserDao().upsert(
-            CreatedUserEntity(name = "Ada", email = "ada@example.com", createdAt = 1_000),
+            CreatedUserEntity(name = "Ada", email = "ada@example.com", createdAt = 1_000)
         )
         database.userPendingSyncDao().upsertCreatePendingSync(CreateUserPendingSyncEntity(localId))
         return localId

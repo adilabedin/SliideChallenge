@@ -8,9 +8,9 @@ import com.androidlearning.sliide_challenge.core.domain.util.EmptyResult
 import com.androidlearning.sliide_challenge.core.domain.util.Result
 import com.androidlearning.sliide_challenge.userfeed.domain.FeedUser
 import com.androidlearning.sliide_challenge.userfeed.domain.FeedUserId
-import com.androidlearning.sliide_challenge.userfeed.domain.RejectedCreation
 import com.androidlearning.sliide_challenge.userfeed.domain.UserFeedRepository
 import com.androidlearning.sliide_challenge.userfeed.domain.UserSyncScheduler
+import kotlin.test.Test
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -18,7 +18,6 @@ import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.plus
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runTest
-import kotlin.test.Test
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class PendingSyncSchedulingTest {
@@ -41,10 +40,6 @@ class PendingSyncSchedulingTest {
         override suspend fun deleteUser(id: FeedUserId): EmptyResult<DataError.Network> = Result.Success(Unit)
 
         override suspend fun syncPendingChanges(): EmptyResult<DataError.Network> = Result.Success(Unit)
-
-        override fun observeRejectedCreations(): Flow<List<RejectedCreation>> = MutableStateFlow(emptyList())
-
-        override suspend fun dismissRejectedCreation(id: Long) = Unit
     }
 
     private class FakeUserSyncScheduler : UserSyncScheduler {

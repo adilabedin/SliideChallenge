@@ -12,10 +12,7 @@ import com.androidlearning.sliide_challenge.core.database.DatabaseConstants
  * Removed once the server returns 201.
  */
 @Entity(tableName = DatabaseConstants.CREATE_USER_PENDING_SYNCS_TABLE)
-data class CreateUserPendingSyncEntity(
-    @PrimaryKey val localId: Long,
-    val wasSent: Boolean = false,
-)
+data class CreateUserPendingSyncEntity(@PrimaryKey val localId: Long, val wasSent: Boolean = false)
 
 /**
  * Latest unsynced edit of a server user, keyed by its GoRest id; upserting keeps only the newest edit.
@@ -27,7 +24,7 @@ data class UpdateUserPendingSyncEntity(
     @PrimaryKey val userId: Long,
     val name: String,
     val email: String,
-    val updatedAt: Long,
+    val updatedAt: Long
 )
 
 /**
@@ -36,6 +33,4 @@ data class UpdateUserPendingSyncEntity(
  * Removed once the server returns 204.
  */
 @Entity(tableName = DatabaseConstants.DELETE_USER_PENDING_SYNCS_TABLE)
-data class DeleteUserPendingSyncEntity(
-    @PrimaryKey val userId: Long,
-)
+data class DeleteUserPendingSyncEntity(@PrimaryKey val userId: Long)

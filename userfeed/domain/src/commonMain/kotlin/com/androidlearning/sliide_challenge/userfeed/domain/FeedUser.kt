@@ -6,12 +6,7 @@ import kotlin.time.Instant
  * A row of the user feed: either a user created on this device or one from the fetched GoRest page.
  * [lastSyncedAt] is when the row last matched the server, or null while it has a create or edit still waiting to sync.
  */
-data class FeedUser(
-    val id: FeedUserId,
-    val name: String,
-    val email: String,
-    val lastSyncedAt: Instant?,
-)
+data class FeedUser(val id: FeedUserId, val name: String, val email: String, val lastSyncedAt: Instant?)
 
 /**
  * Tells the repository which table a [FeedUser] lives in. Local row ids and GoRest ids are separate sequences and can

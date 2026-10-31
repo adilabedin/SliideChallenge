@@ -11,11 +11,11 @@ import assertk.assertions.isNull
 import assertk.assertions.isTrue
 import com.androidlearning.sliide_challenge.core.database.DatabaseFactory
 import com.androidlearning.sliide_challenge.core.database.SliideDatabase
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.test.runTest
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.test.runTest
 
 class UserPendingSyncDaoTest {
 
@@ -171,6 +171,6 @@ class UserPendingSyncDaoTest {
             userId = userId,
             name = name,
             email = "user$userId@example.com",
-            updatedAt = updatedAt,
+            updatedAt = updatedAt
         )
 }

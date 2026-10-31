@@ -39,18 +39,22 @@ fun UserRow(
     isSelected: Boolean,
     isOpened: Boolean,
     onClick: () -> Unit,
-    onLongClick: () -> Unit,
+    onLongClick: () -> Unit
 ) {
     val haptics = LocalHapticFeedback.current
     val containerColor by animateColorAsState(
-        if (isSelected || isOpened) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surface,
+        if (isSelected || isOpened) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surface
     )
     ListItem(
         modifier = Modifier.combinedClickable(
             onClickLabel = when (mode) {
                 FeedMode.Browse -> stringResource(Res.string.row_action_open)
+
                 FeedMode.Edit -> stringResource(Res.string.action_edit)
-                FeedMode.Delete -> stringResource(if (isSelected) Res.string.row_action_deselect else Res.string.row_action_select)
+
+                FeedMode.Delete -> stringResource(
+                    if (isSelected) Res.string.row_action_deselect else Res.string.row_action_select
+                )
             },
             onClick = onClick,
             onLongClickLabel = stringResource(Res.string.action_delete),
@@ -61,7 +65,7 @@ fun UserRow(
                 }
             } else {
                 null
-            },
+            }
         ),
         colors = ListItemDefaults.colors(containerColor = containerColor),
         leadingContent = if (mode == FeedMode.Delete) {
@@ -81,7 +85,7 @@ fun UserRow(
                         MaterialTheme.colorScheme.onSurfaceVariant
                     } else {
                         MaterialTheme.colorScheme.tertiary
-                    },
+                    }
                 )
             }
         },
@@ -89,7 +93,7 @@ fun UserRow(
             { Icon(Icons.Default.Edit, contentDescription = null) }
         } else {
             null
-        },
+        }
     )
 }
 
@@ -98,12 +102,18 @@ fun UserRow(
 private fun UserRowPreview() {
     SliideTheme {
         UserRow(
-            user = FeedUserUi(FeedUserId.Remote(1), "Ada Lovelace", "ada@example.com", SyncStatus.Synced(TimeAgo.Minutes(5)), true),
+            user = FeedUserUi(
+                FeedUserId.Remote(1),
+                "Ada Lovelace",
+                "ada@example.com",
+                SyncStatus.Synced(TimeAgo.Minutes(5)),
+                true
+            ),
             mode = FeedMode.Delete,
             isSelected = true,
             isOpened = false,
             onClick = {},
-            onLongClick = {},
+            onLongClick = {}
         )
     }
 }

@@ -35,6 +35,7 @@ import com.androidlearning.sliide_challenge.core.presentation.util.currentDevice
 val DeviceConfiguration.showsListDetailOnePaneAtATime: Boolean
     get() = when (this) {
         DeviceConfiguration.MOBILE_PORTRAIT -> true
+
         DeviceConfiguration.MOBILE_LANDSCAPE,
         DeviceConfiguration.TABLET_PORTRAIT,
         DeviceConfiguration.TABLET_LANDSCAPE,
@@ -56,7 +57,7 @@ fun <T : Any> SliideAdaptiveListDetailLayout(
     detail: @Composable (T) -> Unit,
     emptyDetail: @Composable () -> Unit,
     modifier: Modifier = Modifier,
-    configuration: DeviceConfiguration = currentDeviceConfiguration(),
+    configuration: DeviceConfiguration = currentDeviceConfiguration()
 ) {
     val stateHolder = rememberSaveableStateHolder()
     val savedList: @Composable () -> Unit = { stateHolder.SaveableStateProvider(LIST_STATE_KEY) { list() } }
@@ -73,7 +74,7 @@ fun <T : Any> SliideAdaptiveListDetailLayout(
                 } else {
                     slideInHorizontally { -it / 4 } + fadeIn() togetherWith slideOutHorizontally { it }
                 }
-            },
+            }
         ) { item ->
             if (item == null) savedList() else detail(item)
         }
@@ -86,7 +87,7 @@ fun <T : Any> SliideAdaptiveListDetailLayout(
                     modifier = Modifier
                         .width(listWidth)
                         .fillMaxHeight()
-                        .consumeWindowInsets(WindowInsets.safeDrawing.only(WindowInsetsSides.End)),
+                        .consumeWindowInsets(WindowInsets.safeDrawing.only(WindowInsetsSides.End))
                 ) {
                     savedList()
                 }
@@ -97,7 +98,7 @@ fun <T : Any> SliideAdaptiveListDetailLayout(
                         .weight(1f)
                         .fillMaxHeight()
                         .consumeWindowInsets(WindowInsets.safeDrawing.only(WindowInsetsSides.Start)),
-                    transitionSpec = { fadeIn() togetherWith fadeOut() },
+                    transitionSpec = { fadeIn() togetherWith fadeOut() }
                 ) { item ->
                     if (item == null) emptyDetail() else detail(item)
                 }
@@ -126,7 +127,7 @@ private fun SliideAdaptiveListDetailLayoutMobilePortraitPreview() {
             list = { PreviewPane("List") },
             detail = { item: String -> PreviewPane(item) },
             emptyDetail = { PreviewPane("Nothing selected") },
-            configuration = DeviceConfiguration.MOBILE_PORTRAIT,
+            configuration = DeviceConfiguration.MOBILE_PORTRAIT
         )
     }
 }
@@ -140,7 +141,7 @@ private fun SliideAdaptiveListDetailLayoutTabletLandscapePreview() {
             list = { PreviewPane("List") },
             detail = { item: String -> PreviewPane(item) },
             emptyDetail = { PreviewPane("Nothing selected") },
-            configuration = DeviceConfiguration.TABLET_LANDSCAPE,
+            configuration = DeviceConfiguration.TABLET_LANDSCAPE
         )
     }
 }

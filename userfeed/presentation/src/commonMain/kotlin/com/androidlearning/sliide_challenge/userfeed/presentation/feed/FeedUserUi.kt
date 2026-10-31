@@ -9,7 +9,7 @@ data class FeedUserUi(
     val name: String,
     val email: String,
     val syncStatus: SyncStatus,
-    val isSynced: Boolean,
+    val isSynced: Boolean
 )
 
 fun FeedUser.toFeedUserUi(now: Instant): FeedUserUi = FeedUserUi(
@@ -17,12 +17,11 @@ fun FeedUser.toFeedUserUi(now: Instant): FeedUserUi = FeedUserUi(
     name = name,
     email = email,
     syncStatus = syncStatusOf(lastSyncedAt, now),
-    isSynced = lastSyncedAt != null,
+    isSynced = lastSyncedAt != null
 )
 
 /** Lazy-list keys must be saveable on Android, so the sealed id is flattened to a string unique across both kinds. */
-internal fun FeedUserId.listKey(): String =
-    when (this) {
-        is FeedUserId.Created -> "created-$localId"
-        is FeedUserId.Remote -> "remote-$id"
-    }
+internal fun FeedUserId.listKey(): String = when (this) {
+    is FeedUserId.Created -> "created-$localId"
+    is FeedUserId.Remote -> "remote-$id"
+}

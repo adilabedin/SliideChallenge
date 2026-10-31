@@ -24,11 +24,7 @@ import org.jetbrains.compose.resources.stringResource
 
 /** A full-width, error-tinted button that starts deleting a user; pair it with [DeleteUserSheet] to confirm. */
 @Composable
-fun DeleteUserButton(
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-    enabled: Boolean = true,
-) {
+fun DeleteUserButton(onClick: () -> Unit, modifier: Modifier = Modifier, enabled: Boolean = true) {
     OutlinedButton(
         onClick = onClick,
         enabled = enabled,
@@ -38,8 +34,8 @@ fun DeleteUserButton(
         colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
         border = BorderStroke(
             width = 1.dp,
-            color = if (enabled) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.outlineVariant,
-        ),
+            color = if (enabled) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.outlineVariant
+        )
     ) {
         Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(ButtonDefaults.IconSize))
         Spacer(modifier = Modifier.width(ButtonDefaults.IconSpacing))

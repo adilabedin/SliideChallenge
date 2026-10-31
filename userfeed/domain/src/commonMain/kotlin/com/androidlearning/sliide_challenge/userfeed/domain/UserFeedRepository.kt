@@ -16,7 +16,7 @@ interface UserFeedRepository {
 
     /**
      * If GoRest rejects the user ([DataError.Network.UNPROCESSABLE_ENTITY], e.g. email already taken), it is removed
-     * again and reported through [observeRejectedCreations]; after any other failure it stays queued for a later sync.
+     * again, along with its pending create; after any other failure it stays queued for a later sync.
      */
     suspend fun createUser(name: String, email: String): EmptyResult<DataError.Network>
 
@@ -39,9 +39,4 @@ interface UserFeedRepository {
      * as gone); anything else stays queued for the next sync. Returns the first error if any change failed.
      */
     suspend fun syncPendingChanges(): EmptyResult<DataError.Network>
-
-    /** Created users GoRest refused, whether on create or in a later sync, oldest first, until dismissed. */
-    fun observeRejectedCreations(): Flow<List<RejectedCreation>>
-
-    suspend fun dismissRejectedCreation(id: Long)
 }

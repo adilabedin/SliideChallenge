@@ -26,7 +26,7 @@ interface CreatedUserDao {
     /** Records the 201: the user now has a GoRest id and was in sync at [syncedAt]. */
     @Query(
         "UPDATE ${DatabaseConstants.CREATED_USERS_TABLE} SET remoteId = :remoteId, lastSyncedAt = :syncedAt " +
-            "WHERE localId = :localId",
+            "WHERE localId = :localId"
     )
     suspend fun setRemoteId(localId: Long, remoteId: Long, syncedAt: Long)
 

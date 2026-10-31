@@ -19,7 +19,7 @@ private val noInternetCodes = setOf(
     NSURLErrorCannotConnectToHost,
     NSURLErrorDNSLookupFailed,
     NSURLErrorDataNotAllowed,
-    NSURLErrorInternationalRoamingOff,
+    NSURLErrorInternationalRoamingOff
 )
 
 actual fun Throwable.toPlatformNetworkError(): DataError.Network? {

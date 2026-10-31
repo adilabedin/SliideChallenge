@@ -23,7 +23,7 @@ data class UserDetailState(
     val isNameTouched: Boolean = false,
     val isEmailTouched: Boolean = false,
     /** True while the delete bottom sheet asks for confirmation. */
-    val isDeleteSheetVisible: Boolean = false,
+    val isDeleteSheetVisible: Boolean = false
 ) {
     val nameErrorShown: NameValidationError? get() = nameError.takeIf { isNameTouched }
     val emailErrorShown: EmailValidationError? get() = emailError.takeIf { isEmailTouched }

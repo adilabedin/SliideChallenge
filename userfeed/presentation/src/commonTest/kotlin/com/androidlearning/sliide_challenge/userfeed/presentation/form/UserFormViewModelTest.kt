@@ -17,6 +17,9 @@ import com.androidlearning.sliide_challenge.userfeed.domain.FeedUser
 import com.androidlearning.sliide_challenge.userfeed.domain.FeedUserId
 import com.androidlearning.sliide_challenge.userfeed.domain.NameValidationError
 import com.androidlearning.sliide_challenge.userfeed.presentation.FakeUserFeedRepository
+import kotlin.test.AfterTest
+import kotlin.test.BeforeTest
+import kotlin.test.Test
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -25,9 +28,6 @@ import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
-import kotlin.test.AfterTest
-import kotlin.test.BeforeTest
-import kotlin.test.Test
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class UserFormViewModelTest {
@@ -178,7 +178,7 @@ class UserFormViewModelTest {
     }
 
     @Test
-    fun `a create refused after the form is closed is left for the feed to report`() {
+    fun `a create refused after the form is closed still finishes`() {
         val pendingSave = CompletableDeferred<Unit>()
         repository.pendingSave = pendingSave
         repository.nextResult = Result.Error(DataError.Network.UNPROCESSABLE_ENTITY)
@@ -190,12 +190,10 @@ class UserFormViewModelTest {
         pendingSave.complete(Unit)
 
         assertThat(repository.completedSaves).isEqualTo(1)
-        // The form never showed the error, so the record stays for the feed's snackbar.
-        assertThat(repository.rejectedCreations.value.map { it.email }).containsExactly("ada@example.com")
     }
 
     @Test
-    fun `an email GoRest refuses keeps the form open with the error and drops the rejection record`() = runTest {
+    fun `an email GoRest refuses keeps the form open with the error`() = runTest {
         repository.nextResult = Result.Error(DataError.Network.UNPROCESSABLE_ENTITY)
         val viewModel = createViewModel()
         viewModel.fill("Ada", "taken@example.com")
@@ -209,7 +207,6 @@ class UserFormViewModelTest {
         assertThat(state.isSaving).isFalse()
         assertThat(state.isEmailTaken).isTrue()
         assertThat(state.canSubmit).isFalse()
-        assertThat(repository.rejectedCreations.value).isEmpty()
     }
 
     @Test

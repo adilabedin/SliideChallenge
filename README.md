@@ -416,25 +416,23 @@ test name in the message, and a badly formatted `commonMain` file produced a `bl
 - **A failed sync keeps the change queued; only success removes it.** There are two exceptions:
   - A 404 on a queued edit or delete means the user is already gone from GoRest, so the change is dropped.
   - A 422 on a create (GoRest refuses the user, in practice because the email is already taken) can never succeed.
-    So the created user is removed and recorded in `RejectedCreationsTable`, whether the 422 comes back on the first
-    POST or in a later sync. The UI reads `observeRejectedCreations()` to show a snackbar and then calls
-    `dismissRejectedCreation()`. The record is persisted because the rejection can arrive from a background sync
-    while the app is closed. When the 422 comes back to the add-user form, the form shows "This email is already
-    taken" inline and stays open, so the user can fix it in place. It then dismisses the rejection record it just
-    caused, so the feed won't report it a second time. If the form was closed before the 422 arrived, the record
-    stays and the feed reports it.
+    So the created user and its pending create are removed in one transaction, whether the 422 comes back on the
+    first POST or in a later sync. When it comes back to the add-user form, the form shows "This email is already
+    taken" inline and stays open, so the user can fix it in place. When it comes back from a background sync, the user
+    simply disappears from the feed. *Trade-off:* that disappearance is silent; telling the user would need a
+    persisted record (the sync can run while the app is closed) and a feed message. We judged that not worth the extra
+    table, since it only happens when someone else takes the email between the user adding it offline and the sync.
   - A 422 on a queued edit is still retried every 30 minutes until the user edits or deletes that user again. Known
-    gap: the row reads "Not synced" all that time with no explanation. Surfacing it like a rejected create would be the
-    next step; the change itself is never dropped.
+    gap: the row reads "Not synced" all that time with no explanation. The change itself is never dropped.
 - **A lost 201 is recovered, not reported as a rejection.** POST isn't idempotent. If GoRest creates the user but
   the 201 never arrives (a timeout, or the app dying mid-request), the create stays queued and its resend is refused
   (422) because the email is now taken. Each pending create therefore records `wasSent` just before its POST. A 422
   on a resend looks the email up (`GET users?email=`; GoRest matches partially, so the exact email is picked) and
   adopts that user's id if the **name matches too**. Otherwise someone else holds the email and it is a genuine
-  rejection. If the lookup fails, the create stays queued. A 422 on the *first* POST is never looked up, so the form's
+  rejection, and the user is removed. If the lookup fails, the create stays queued. A 422 on the *first* POST is never looked up, so the form's
   "email already taken" is unchanged. Gaps we accept: if the user edits the email of a create whose 201 was lost, the
   resend succeeds and GoRest ends up with a stray duplicate; if they edit its name, the lookup sees a different name and
-  reports a rejection.
+  the user is removed as rejected.
 - **GoRest wipes data, so created users can outlive their server copy.** Created users are local-only (above), so a
   user GoRest has since deleted stays in the feed. Editing it gets a 404, which drops the queued edit as "already gone",
   but the row keeps the edited text and its old "Synced … ago" time, so it looks synced when it isn't. Deleting it works

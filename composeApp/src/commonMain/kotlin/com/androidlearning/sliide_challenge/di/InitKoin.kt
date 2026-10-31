@@ -8,17 +8,18 @@ import com.androidlearning.sliide_challenge.userfeed.presentation.di.userFeedPre
 import org.koin.core.context.startKoin
 import org.koin.dsl.KoinAppDeclaration
 
-fun initKoin(config: KoinAppDeclaration? = null) {
+/** [isDebugBuild] turns on debug-only behaviour such as HTTP logging. */
+fun initKoin(isDebugBuild: Boolean, config: KoinAppDeclaration? = null) {
     startKoin {
         config?.invoke(this)
         modules(
             // core
             coreDatabaseModule,
-            coreDataModule,
+            coreDataModule(enableHttpLogging = isDebugBuild),
             corePresentationModule,
             // features
             userFeedDataModule,
-            userFeedPresentationModule,
+            userFeedPresentationModule
         )
     }
 }

@@ -36,11 +36,11 @@ fun UserFields(
     onNameFocusLost: () -> Unit,
     onEmailFocusLost: () -> Unit,
     onDone: () -> Unit,
-    modifier: Modifier = Modifier,
+    modifier: Modifier = Modifier
 ) {
     Column(
         modifier = modifier,
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         UserTextField(
             value = name,
@@ -53,8 +53,8 @@ fun UserFields(
             enabled = enabled,
             keyboardOptions = KeyboardOptions(
                 capitalization = KeyboardCapitalization.Words,
-                imeAction = ImeAction.Next,
-            ),
+                imeAction = ImeAction.Next
+            )
         )
         UserTextField(
             value = email,
@@ -68,9 +68,9 @@ fun UserFields(
             keyboardOptions = KeyboardOptions(
                 keyboardType = KeyboardType.Email,
                 autoCorrectEnabled = false,
-                imeAction = ImeAction.Done,
+                imeAction = ImeAction.Done
             ),
-            keyboardActions = KeyboardActions(onDone = { onDone() }),
+            keyboardActions = KeyboardActions(onDone = { onDone() })
         )
     }
 }
@@ -91,7 +91,7 @@ private fun UserFieldsPreview() {
             onEmailChange = {},
             onNameFocusLost = {},
             onEmailFocusLost = {},
-            onDone = {},
+            onDone = {}
         )
     }
 }

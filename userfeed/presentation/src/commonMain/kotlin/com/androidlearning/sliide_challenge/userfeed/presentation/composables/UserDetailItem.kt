@@ -21,7 +21,7 @@ fun UserDetailItem(
     value: String,
     icon: ImageVector,
     modifier: Modifier = Modifier,
-    valueColor: Color = Color.Unspecified,
+    valueColor: Color = Color.Unspecified
 ) {
     ListItem(
         modifier = modifier,
@@ -30,7 +30,7 @@ fun UserDetailItem(
             Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
         },
         overlineContent = { Text(label) },
-        headlineContent = { Text(text = value, color = valueColor) },
+        headlineContent = { Text(text = value, color = valueColor) }
     )
 }
 

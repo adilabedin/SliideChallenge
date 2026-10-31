@@ -12,15 +12,15 @@ class UserMapperTest {
         val dto = UserDto(
             id = 8686808,
             name = "Rep. Kailash Sinha",
-            email = "kailash_rep_sinha@gorczany.example",
+            email = "kailash_rep_sinha@gorczany.example"
         )
 
         assertThat(dto.toDomain()).isEqualTo(
             User(
                 id = 8686808,
                 name = "Rep. Kailash Sinha",
-                email = "kailash_rep_sinha@gorczany.example",
-            ),
+                email = "kailash_rep_sinha@gorczany.example"
+            )
         )
     }
 }

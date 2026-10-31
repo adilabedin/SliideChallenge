@@ -16,6 +16,11 @@ import com.androidlearning.sliide_challenge.userfeed.domain.FeedUserId
 import com.androidlearning.sliide_challenge.userfeed.presentation.FakeUserFeedRepository
 import com.androidlearning.sliide_challenge.userfeed.presentation.feed.SyncStatus
 import com.androidlearning.sliide_challenge.userfeed.presentation.feed.TimeAgo
+import kotlin.test.AfterTest
+import kotlin.test.BeforeTest
+import kotlin.test.Test
+import kotlin.time.Clock
+import kotlin.time.Instant
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -23,11 +28,6 @@ import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
-import kotlin.test.AfterTest
-import kotlin.test.BeforeTest
-import kotlin.test.Test
-import kotlin.time.Clock
-import kotlin.time.Instant
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class UserDetailViewModelTest {

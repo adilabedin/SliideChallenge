@@ -32,7 +32,7 @@ class UserValidatorTest {
             "Владимир",
             // "e" followed by a combining acute accent rather than the precomposed "é".
             "Renée",
-            "Al",
+            "Al"
         ).forEach { name ->
             assertThat(UserValidator.validateName(name), name).isInstanceOf<Result.Success<Unit>>()
         }
@@ -73,7 +73,7 @@ class UserValidatorTest {
             "a_b-c@sub-domain.example.io",
             "ADA@EXAMPLE.COM",
             "o'brien@example.ie",
-            "1234@123.example.com",
+            "1234@123.example.com"
         ).forEach { email ->
             assertThat(UserValidator.validateEmail(email), email).isInstanceOf<Result.Success<Unit>>()
         }
@@ -104,7 +104,7 @@ class UserValidatorTest {
             "ada..lovelace@example.com",
             "ada lovelace@example.com",
             "ada@exa mple.com",
-            "josé@example.com",
+            "josé@example.com"
         ).forEach { email ->
             assertThat(UserValidator.validateEmail(email), email)
                 .isEqualTo(Result.Error(EmailValidationError.INVALID_FORMAT))

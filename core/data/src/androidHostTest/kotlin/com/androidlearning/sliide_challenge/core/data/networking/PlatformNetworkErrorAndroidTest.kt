@@ -5,16 +5,21 @@ import assertk.assertions.isEqualTo
 import com.androidlearning.sliide_challenge.core.domain.util.DataError
 import com.androidlearning.sliide_challenge.core.domain.util.Result
 import io.ktor.client.engine.mock.MockEngine
-import kotlinx.coroutines.test.runTest
-import kotlinx.serialization.json.JsonObject
 import java.net.ConnectException
 import java.net.UnknownHostException
 import kotlin.test.Test
+import kotlinx.coroutines.test.runTest
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
 
 class PlatformNetworkErrorAndroidTest {
 
-    private fun clientThrowing(error: Throwable) =
-        HttpClientFactory.create(apiKey = "test-token", engine = MockEngine { throw error })
+    private fun clientThrowing(error: Throwable) = HttpClientFactory.create(
+        apiKey = "test-token",
+        json = Json,
+        enableLogging = false,
+        engine = MockEngine { throw error }
+    )
 
     @Test
     fun `unknown host maps to no internet`() = runTest {

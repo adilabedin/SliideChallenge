@@ -23,13 +23,11 @@ import org.jetbrains.compose.resources.stringResource
  * a pull can't start before there is a cache to refresh.
  */
 @Composable
-fun UserListPlaceholder(
-    modifier: Modifier = Modifier,
-) {
+fun UserListPlaceholder(modifier: Modifier = Modifier) {
     val loadingDescription = stringResource(Res.string.feed_loading_users)
     LazyColumn(
         modifier = modifier.semantics { contentDescription = loadingDescription },
-        userScrollEnabled = false,
+        userScrollEnabled = false
     ) {
         items(PLACEHOLDER_ROW_COUNT) {
             UserRowPlaceholder()
@@ -44,7 +42,7 @@ private fun UserRowPlaceholder() {
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 12.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         ShimmerBlock(modifier = Modifier.fillMaxWidth(0.45f), height = 16.dp)
         ShimmerBlock(modifier = Modifier.fillMaxWidth(0.7f), height = 14.dp)

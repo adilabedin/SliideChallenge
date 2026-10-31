@@ -19,6 +19,5 @@ val coreDatabaseModule = module {
     single { get<SliideDatabase>().userDao() }
     single { get<SliideDatabase>().createdUserDao() }
     single { get<SliideDatabase>().userPendingSyncDao() }
-    single { get<SliideDatabase>().rejectedCreationDao() }
     singleOf(::RoomTransactionRunner) bind DatabaseTransactionRunner::class
 }

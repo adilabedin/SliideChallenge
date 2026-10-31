@@ -20,5 +20,5 @@ data class CreatedUserEntity(
     val name: String,
     val email: String,
     val createdAt: Long,
-    val lastSyncedAt: Long? = null,
+    val lastSyncedAt: Long? = null
 )

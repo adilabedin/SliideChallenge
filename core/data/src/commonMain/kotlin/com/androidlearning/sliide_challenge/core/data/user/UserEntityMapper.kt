@@ -8,11 +8,11 @@ fun User.toEntity(syncedAt: Long): UserEntity = UserEntity(
     id = id,
     name = name,
     email = email,
-    lastSyncedAt = syncedAt,
+    lastSyncedAt = syncedAt
 )
 
 fun UserEntity.toDomain(): User = User(
     id = id,
     name = name,
-    email = email,
+    email = email
 )

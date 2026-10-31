@@ -16,7 +16,7 @@ class UserSyncWorker(
     context: Context,
     params: WorkerParameters,
     private val userFeedRepository: UserFeedRepository,
-    private val pendingSyncScheduling: PendingSyncScheduling,
+    private val pendingSyncScheduling: PendingSyncScheduling
 ) : CoroutineWorker(context, params) {
 
     override suspend fun doWork(): WorkerResult {

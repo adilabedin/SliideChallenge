@@ -56,7 +56,7 @@ fun UserTextField(
     enabled: Boolean,
     keyboardOptions: KeyboardOptions,
     modifier: Modifier = Modifier,
-    keyboardActions: KeyboardActions = KeyboardActions.Default,
+    keyboardActions: KeyboardActions = KeyboardActions.Default
 ) {
     // onFocusChanged also fires with "unfocused" when the field is first laid out; only a real blur counts.
     var hasBeenFocused by remember { mutableStateOf(false) }
@@ -70,7 +70,7 @@ fun UserTextField(
                 Icon(
                     imageVector = Icons.Default.CheckCircle,
                     contentDescription = stringResource(Res.string.field_valid),
-                    tint = MaterialTheme.colorScheme.primary,
+                    tint = MaterialTheme.colorScheme.primary
                 )
             }
         },
@@ -90,26 +90,24 @@ fun UserTextField(
                 } else if (hasBeenFocused) {
                     onFocusLost()
                 }
-            },
+            }
     )
 }
 
 @Composable
-fun NameValidationError.toMessage(): String =
-    when (this) {
-        NameValidationError.EMPTY -> stringResource(Res.string.name_error_empty)
-        NameValidationError.TOO_SHORT -> stringResource(Res.string.name_error_too_short, UserValidator.NAME_MIN_LENGTH)
-        NameValidationError.TOO_LONG -> stringResource(Res.string.name_error_too_long, UserValidator.NAME_MAX_LENGTH)
-        NameValidationError.INVALID_CHARACTERS -> stringResource(Res.string.name_error_invalid_characters)
-    }
+fun NameValidationError.toMessage(): String = when (this) {
+    NameValidationError.EMPTY -> stringResource(Res.string.name_error_empty)
+    NameValidationError.TOO_SHORT -> stringResource(Res.string.name_error_too_short, UserValidator.NAME_MIN_LENGTH)
+    NameValidationError.TOO_LONG -> stringResource(Res.string.name_error_too_long, UserValidator.NAME_MAX_LENGTH)
+    NameValidationError.INVALID_CHARACTERS -> stringResource(Res.string.name_error_invalid_characters)
+}
 
 @Composable
-fun EmailValidationError.toMessage(): String =
-    when (this) {
-        EmailValidationError.EMPTY -> stringResource(Res.string.email_error_empty)
-        EmailValidationError.TOO_LONG -> stringResource(Res.string.email_error_too_long, UserValidator.EMAIL_MAX_LENGTH)
-        EmailValidationError.INVALID_FORMAT -> stringResource(Res.string.email_error_invalid_format)
-    }
+fun EmailValidationError.toMessage(): String = when (this) {
+    EmailValidationError.EMPTY -> stringResource(Res.string.email_error_empty)
+    EmailValidationError.TOO_LONG -> stringResource(Res.string.email_error_too_long, UserValidator.EMAIL_MAX_LENGTH)
+    EmailValidationError.INVALID_FORMAT -> stringResource(Res.string.email_error_invalid_format)
+}
 
 @Preview
 @Composable
@@ -124,7 +122,7 @@ private fun UserTextFieldErrorPreview() {
             errorMessage = EmailValidationError.INVALID_FORMAT.toMessage(),
             isValid = false,
             enabled = true,
-            keyboardOptions = KeyboardOptions.Default,
+            keyboardOptions = KeyboardOptions.Default
         )
     }
 }

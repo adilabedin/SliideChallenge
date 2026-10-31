@@ -7,10 +7,9 @@ import platform.Foundation.NSDocumentDirectory
 import platform.Foundation.NSFileManager
 import platform.Foundation.NSUserDomainMask
 
-fun databaseBuilder(): RoomDatabase.Builder<SliideDatabase> =
-    Room.databaseBuilder<SliideDatabase>(
-        name = "${documentDirectory()}/${DatabaseConstants.DB_NAME}",
-    )
+fun databaseBuilder(): RoomDatabase.Builder<SliideDatabase> = Room.databaseBuilder<SliideDatabase>(
+    name = "${documentDirectory()}/${DatabaseConstants.DB_NAME}"
+)
 
 @OptIn(ExperimentalForeignApi::class)
 private fun documentDirectory(): String {
@@ -19,7 +18,7 @@ private fun documentDirectory(): String {
         inDomain = NSUserDomainMask,
         appropriateForURL = null,
         create = false,
-        error = null,
+        error = null
     )
     return requireNotNull(url?.path) { "Documents directory unavailable" }
 }

@@ -1,6 +1,7 @@
 package com.androidlearning.sliide_challenge
 
 import android.app.Application
+import android.content.pm.ApplicationInfo
 import com.androidlearning.sliide_challenge.core.domain.util.ApplicationScope
 import com.androidlearning.sliide_challenge.di.initKoin
 import com.androidlearning.sliide_challenge.userfeed.data.di.userFeedSyncModule
@@ -12,7 +13,9 @@ import org.koin.androidx.workmanager.koin.workManagerFactory
 class SliideApplication : Application() {
     override fun onCreate() {
         super.onCreate()
-        initKoin {
+        // The app module has no BuildConfig; the debuggable flag is set for debug builds only.
+        val isDebugBuild = applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0
+        initKoin(isDebugBuild = isDebugBuild) {
             androidContext(this@SliideApplication)
             // Initializes WorkManager with Koin's factory; the default initializer is removed in the manifest.
             workManagerFactory()

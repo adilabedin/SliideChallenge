@@ -15,33 +15,33 @@ import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
 import io.ktor.http.contentType
 import io.ktor.serialization.kotlinx.json.json
+import io.ktor.util.Platform
 import kotlinx.serialization.json.Json
 
 object HttpClientFactory {
 
     /** Uses the platform engine on the classpath (OkHttp on Android, Darwin on iOS). */
-    fun create(apiKey: String): HttpClient = HttpClient { configure(apiKey) }
+    fun create(apiKey: String, json: Json, enableLogging: Boolean): HttpClient =
+        HttpClient { configure(apiKey, json, enableLogging) }
 
-    fun create(apiKey: String, engine: HttpClientEngine): HttpClient = HttpClient(engine) { configure(apiKey) }
+    fun create(apiKey: String, json: Json, enableLogging: Boolean, engine: HttpClientEngine): HttpClient =
+        HttpClient(engine) { configure(apiKey, json, enableLogging) }
 
-    private fun HttpClientConfig<*>.configure(apiKey: String) {
+    private fun HttpClientConfig<*>.configure(apiKey: String, json: Json, enableLogging: Boolean) {
         install(ContentNegotiation) {
-            json(
-                Json {
-                    ignoreUnknownKeys = true
-                    explicitNulls = false
-                },
-            )
+            json(json)
         }
         install(HttpTimeout) {
             requestTimeoutMillis = ApiConstants.TIMEOUT_MILLIS
             connectTimeoutMillis = ApiConstants.TIMEOUT_MILLIS
             socketTimeoutMillis = ApiConstants.TIMEOUT_MILLIS
         }
-        install(Logging) {
-            logger = Logger.SIMPLE
-            level = LogLevel.INFO
-            sanitizeHeader { header -> header == HttpHeaders.Authorization }
+        if (enableLogging) {
+            install(Logging) {
+                logger = Logger.SIMPLE
+                level = LogLevel.INFO
+                sanitizeHeader { header -> header == HttpHeaders.Authorization }
+            }
         }
         install(DefaultRequest.Plugin) {
             url(ApiConstants.BASE_URL)

@@ -17,14 +17,12 @@ import com.androidlearning.sliide_challenge.core.designsystem.theme.SliideTheme
 
 /** A default person image; it stays the same while the name is typed, so the header doesn't flicker. */
 @Composable
-fun UserAvatar(
-    modifier: Modifier = Modifier,
-) {
+fun UserAvatar(modifier: Modifier = Modifier) {
     Surface(
         shape = CircleShape,
         color = MaterialTheme.colorScheme.primaryContainer,
         contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-        modifier = modifier.size(88.dp),
+        modifier = modifier.size(88.dp)
     ) {
         Box(contentAlignment = Alignment.Center) {
             Icon(Icons.Default.Person, contentDescription = null, modifier = Modifier.size(44.dp))

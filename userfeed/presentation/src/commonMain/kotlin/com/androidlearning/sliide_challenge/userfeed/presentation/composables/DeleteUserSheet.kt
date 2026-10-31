@@ -47,31 +47,26 @@ fun DeleteUserSheet(
     email: String,
     onConfirm: () -> Unit,
     onDismiss: () -> Unit,
-    modifier: Modifier = Modifier,
+    modifier: Modifier = Modifier
 ) {
     DeleteConfirmationSheet(
         title = stringResource(Res.string.delete_user_title, name),
         message = stringResource(Res.string.delete_user_message, email),
         onConfirm = onConfirm,
         onDismiss = onDismiss,
-        modifier = modifier,
+        modifier = modifier
     )
 }
 
 /** Asks to confirm deleting [count] users at once; behaves like [DeleteUserSheet]. */
 @Composable
-fun DeleteUsersSheet(
-    count: Int,
-    onConfirm: () -> Unit,
-    onDismiss: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
+fun DeleteUsersSheet(count: Int, onConfirm: () -> Unit, onDismiss: () -> Unit, modifier: Modifier = Modifier) {
     DeleteConfirmationSheet(
         title = pluralStringResource(Res.plurals.delete_users_title, count, count),
         message = stringResource(Res.string.delete_users_message),
         onConfirm = onConfirm,
         onDismiss = onDismiss,
-        modifier = modifier,
+        modifier = modifier
     )
 }
 
@@ -82,13 +77,14 @@ private fun DeleteConfirmationSheet(
     message: String,
     onConfirm: () -> Unit,
     onDismiss: () -> Unit,
-    modifier: Modifier = Modifier,
+    modifier: Modifier = Modifier
 ) {
     val sheetState = rememberBottomSheetState(
         initialValue = SheetValue.Hidden,
-        enabledValues = setOf(SheetValue.Hidden, SheetValue.Expanded),
+        enabledValues = setOf(SheetValue.Hidden, SheetValue.Expanded)
     )
     val scope = rememberCoroutineScope()
+
     // Lets the sheet slide away before the action removes it from composition.
     fun hideThen(action: () -> Unit) {
         scope.launch { sheetState.hide() }.invokeOnCompletion { action() }
@@ -99,35 +95,35 @@ private fun DeleteConfirmationSheet(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(start = 24.dp, end = 24.dp, bottom = 24.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Icon(
                 imageVector = Icons.Default.Delete,
                 contentDescription = null,
                 modifier = Modifier.size(40.dp),
-                tint = MaterialTheme.colorScheme.error,
+                tint = MaterialTheme.colorScheme.error
             )
             Spacer(modifier = Modifier.height(16.dp))
             Text(
                 text = title,
                 style = MaterialTheme.typography.titleLarge,
-                textAlign = TextAlign.Center,
+                textAlign = TextAlign.Center
             )
             Spacer(modifier = Modifier.height(8.dp))
             Text(
                 text = message,
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.Center,
+                textAlign = TextAlign.Center
             )
             Spacer(modifier = Modifier.height(24.dp))
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 OutlinedButton(
                     onClick = { hideThen(onDismiss) },
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier.weight(1f)
                 ) {
                     Text(stringResource(Res.string.action_cancel))
                 }
@@ -136,8 +132,8 @@ private fun DeleteConfirmationSheet(
                     modifier = Modifier.weight(1f),
                     colors = ButtonDefaults.buttonColors(
                         containerColor = MaterialTheme.colorScheme.error,
-                        contentColor = MaterialTheme.colorScheme.onError,
-                    ),
+                        contentColor = MaterialTheme.colorScheme.onError
+                    )
                 ) {
                     Text(stringResource(Res.string.action_delete))
                 }

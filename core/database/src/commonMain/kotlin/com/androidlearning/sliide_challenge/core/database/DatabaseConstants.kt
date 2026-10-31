@@ -8,5 +8,4 @@ object DatabaseConstants {
     const val CREATE_USER_PENDING_SYNCS_TABLE = "CreateUserPendingSyncsTable"
     const val UPDATE_USER_PENDING_SYNCS_TABLE = "UpdateUserPendingSyncsTable"
     const val DELETE_USER_PENDING_SYNCS_TABLE = "DeleteUserPendingSyncsTable"
-    const val REJECTED_CREATIONS_TABLE = "RejectedCreationsTable"
 }

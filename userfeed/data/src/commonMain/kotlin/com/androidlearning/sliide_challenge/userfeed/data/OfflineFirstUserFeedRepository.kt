@@ -6,8 +6,6 @@ import com.androidlearning.sliide_challenge.core.database.user.CreateUserPending
 import com.androidlearning.sliide_challenge.core.database.user.CreatedUserDao
 import com.androidlearning.sliide_challenge.core.database.user.CreatedUserEntity
 import com.androidlearning.sliide_challenge.core.database.user.DeleteUserPendingSyncEntity
-import com.androidlearning.sliide_challenge.core.database.user.RejectedCreationDao
-import com.androidlearning.sliide_challenge.core.database.user.RejectedCreationEntity
 import com.androidlearning.sliide_challenge.core.database.user.UpdateUserPendingSyncEntity
 import com.androidlearning.sliide_challenge.core.database.user.UserDao
 import com.androidlearning.sliide_challenge.core.database.user.UserPendingSyncDao
@@ -18,15 +16,13 @@ import com.androidlearning.sliide_challenge.core.domain.util.EmptyResult
 import com.androidlearning.sliide_challenge.core.domain.util.Result
 import com.androidlearning.sliide_challenge.userfeed.domain.FeedUser
 import com.androidlearning.sliide_challenge.userfeed.domain.FeedUserId
-import com.androidlearning.sliide_challenge.userfeed.domain.RejectedCreation
 import com.androidlearning.sliide_challenge.userfeed.domain.UserFeedRepository
+import kotlin.time.Clock
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import kotlin.time.Clock
 
 /**
  * Room is the single source of truth. Each change is written locally together with its entry in the pending-sync
@@ -39,11 +35,10 @@ class OfflineFirstUserFeedRepository(
     private val userDao: UserDao,
     private val createdUserDao: CreatedUserDao,
     private val pendingSyncDao: UserPendingSyncDao,
-    private val rejectedCreationDao: RejectedCreationDao,
     private val transactionRunner: DatabaseTransactionRunner,
     private val mainRepository: MainRepository,
     private val applicationScope: ApplicationScope,
-    private val clock: Clock = Clock.System,
+    private val clock: Clock = Clock.System
 ) : UserFeedRepository {
 
     /**
@@ -56,7 +51,7 @@ class OfflineFirstUserFeedRepository(
         createdUserDao.getAll(),
         userDao.getAll(),
         pendingSyncDao.observeUpdatePendingSyncs(),
-        pendingSyncDao.observeDeletePendingSyncs(),
+        pendingSyncDao.observeDeletePendingSyncs()
     ) { created, cached, pendingUpdates, pendingDeletes ->
         val pendingEdits = pendingUpdates.associateBy { it.userId }
         // A created user can also be on the fetched page while GoRest has few users; show it once, as created.
@@ -91,6 +86,7 @@ class OfflineFirstUserFeedRepository(
                         createdUserDao.updateDetails(id.localId, name, email)
                         remoteId?.also { queueUpdate(it, name, email) }
                     }
+
                     is FeedUserId.Remote -> {
                         userDao.updateDetails(id.id, name, email)
                         id.id.also { queueUpdate(it, name, email) }
@@ -111,6 +107,7 @@ class OfflineFirstUserFeedRepository(
                     pendingSyncDao.deleteCreatePendingSync(id.localId)
                     remoteId?.also { queueDelete(it) }
                 }
+
                 is FeedUserId.Remote -> {
                     userDao.deleteById(id.id)
                     id.id.also { queueDelete(it) }
@@ -118,13 +115,6 @@ class OfflineFirstUserFeedRepository(
             }
         }
         if (remoteId == null) Result.Success(Unit) else send { syncDelete(remoteId) }
-    }
-
-    override fun observeRejectedCreations(): Flow<List<RejectedCreation>> =
-        rejectedCreationDao.observeAll().map { rows -> rows.map { RejectedCreation(it.id, it.name, it.email) } }
-
-    override suspend fun dismissRejectedCreation(id: Long) {
-        rejectedCreationDao.deleteById(id)
     }
 
     override fun observeHasPendingSyncs(): Flow<Boolean> = pendingSyncDao.observeHasPendingSyncs()
@@ -142,7 +132,7 @@ class OfflineFirstUserFeedRepository(
      * caller still gets the outcome if it is around to wait for it.
      */
     private suspend fun outliveCaller(
-        block: suspend () -> EmptyResult<DataError.Network>,
+        block: suspend () -> EmptyResult<DataError.Network>
     ): EmptyResult<DataError.Network> = applicationScope.async { block() }.await()
 
     /** Sends one queued change right away, in turn with any sync already running. */
@@ -164,6 +154,7 @@ class OfflineFirstUserFeedRepository(
         pendingSyncDao.markCreatePendingSyncSent(localId)
         val created = when (val result = userFeedApi.createUser(user.name, user.email)) {
             is Result.Success -> result.data.copy(name = user.name, email = user.email)
+
             is Result.Error -> {
                 if (result.error != DataError.Network.UNPROCESSABLE_ENTITY) return result.error
                 val lost = if (pending.wasSent) {
@@ -175,7 +166,7 @@ class OfflineFirstUserFeedRepository(
                     null
                 }
                 if (lost == null) {
-                    rejectCreation(localId, user.name, user.email)
+                    rejectCreation(localId)
                     return result.error
                 }
                 lost
@@ -212,12 +203,14 @@ class OfflineFirstUserFeedRepository(
         }
     }
 
-    /** GoRest will never accept this user (422), so retrying is pointless: drop it and keep a record for the UI. */
-    private suspend fun rejectCreation(localId: Long, name: String, email: String) {
+    /**
+     * GoRest will never accept this user (422), so retrying is pointless: drop it with its pending create. The local
+     * row goes too, since it could never sync and the form's corrected resubmit would otherwise add a second copy.
+     */
+    private suspend fun rejectCreation(localId: Long) {
         transactionRunner.runInTransaction {
             createdUserDao.deleteByLocalId(localId)
             pendingSyncDao.deleteCreatePendingSync(localId)
-            rejectedCreationDao.insert(RejectedCreationEntity(name = name, email = email))
         }
     }
 
@@ -230,6 +223,7 @@ class OfflineFirstUserFeedRepository(
                 markSynced(edit.userId)
                 null
             }
+
             is Result.Error -> result.error
         }
         if (error != null && error != DataError.Network.NOT_FOUND) return error
@@ -249,7 +243,7 @@ class OfflineFirstUserFeedRepository(
     /** Replaces any older queued edit of the user, so only the latest one is sent. */
     private suspend fun queueUpdate(remoteId: Long, name: String, email: String) {
         pendingSyncDao.upsertUpdatePendingSync(
-            UpdateUserPendingSyncEntity(userId = remoteId, name = name, email = email, updatedAt = nowMillis()),
+            UpdateUserPendingSyncEntity(userId = remoteId, name = name, email = email, updatedAt = nowMillis())
         )
     }
 

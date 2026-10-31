@@ -25,13 +25,7 @@ import org.jetbrains.compose.resources.stringResource
 
 /** A user's saved details as a read-only card; [syncStatus] is tinted while a change still waits to sync. */
 @Composable
-fun UserDetails(
-    name: String,
-    email: String,
-    syncStatus: String,
-    isSynced: Boolean,
-    modifier: Modifier = Modifier,
-) {
+fun UserDetails(name: String, email: String, syncStatus: String, isSynced: Boolean, modifier: Modifier = Modifier) {
     OutlinedCard(modifier = modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(vertical = 4.dp)) {
             UserDetailItem(label = stringResource(Res.string.field_name), value = name, icon = Icons.Default.Person)
@@ -42,7 +36,7 @@ fun UserDetails(
                 label = stringResource(Res.string.detail_sync_status),
                 value = syncStatus,
                 icon = Icons.Default.Refresh,
-                valueColor = if (isSynced) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.tertiary,
+                valueColor = if (isSynced) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.tertiary
             )
         }
     }
@@ -52,6 +46,11 @@ fun UserDetails(
 @Composable
 private fun UserDetailsPreview() {
     SliideTheme {
-        UserDetails(name = "Ada Lovelace", email = "ada@example.com", syncStatus = SyncStatus.NotSynced.asString(), isSynced = false)
+        UserDetails(
+            name = "Ada Lovelace",
+            email = "ada@example.com",
+            syncStatus = SyncStatus.NotSynced.asString(),
+            isSynced = false
+        )
     }
 }

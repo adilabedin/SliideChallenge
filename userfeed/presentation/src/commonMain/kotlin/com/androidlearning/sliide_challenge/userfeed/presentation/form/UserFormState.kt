@@ -17,7 +17,7 @@ data class UserFormState(
     val isNameTouched: Boolean = false,
     val isEmailTouched: Boolean = false,
     /** GoRest refused the create because another user already has [email]; cleared as soon as the email changes. */
-    val isEmailTaken: Boolean = false,
+    val isEmailTaken: Boolean = false
 ) {
     val nameErrorShown: NameValidationError? get() = nameError.takeIf { isNameTouched }
     val emailErrorShown: EmailValidationError? get() = emailError.takeIf { isEmailTouched }

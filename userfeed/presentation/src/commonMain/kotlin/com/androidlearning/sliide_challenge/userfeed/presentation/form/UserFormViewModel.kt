@@ -24,7 +24,7 @@ import kotlinx.coroutines.launch
 class UserFormViewModel(
     private val mode: UserFormMode,
     private val userFeedRepository: UserFeedRepository,
-    private val savedStateHandle: SavedStateHandle,
+    private val savedStateHandle: SavedStateHandle
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(
@@ -32,9 +32,9 @@ class UserFormViewModel(
             UserFormState(
                 isEditing = mode is UserFormMode.Edit,
                 name = savedStateHandle[KEY_NAME] ?: "",
-                email = savedStateHandle[KEY_EMAIL] ?: "",
-            ),
-        ),
+                email = savedStateHandle[KEY_EMAIL] ?: ""
+            )
+        )
     )
     val state = _state.asStateFlow()
 
@@ -59,13 +59,17 @@ class UserFormViewModel(
                 savedStateHandle[KEY_NAME] = action.name
                 _state.update { validated(it.copy(name = action.name)) }
             }
+
             is UserFormAction.OnEmailChange -> {
                 isEmailEdited = true
                 savedStateHandle[KEY_EMAIL] = action.email
                 _state.update { validated(it.copy(email = action.email, isEmailTaken = false)) }
             }
+
             UserFormAction.OnNameFocusLost -> if (isNameEdited) _state.update { it.copy(isNameTouched = true) }
+
             UserFormAction.OnEmailFocusLost -> if (isEmailEdited) _state.update { it.copy(isEmailTouched = true) }
+
             UserFormAction.OnSubmitClick -> submit()
         }
     }
@@ -109,30 +113,15 @@ class UserFormViewModel(
         }
     }
 
-    private suspend fun save(name: String, email: String): EmptyResult<DataError.Network> =
-        when (mode) {
-            UserFormMode.Create -> userFeedRepository.createUser(name, email).also { result ->
-                if (result is Result.Error && result.error == DataError.Network.UNPROCESSABLE_ENTITY) {
-                    dismissRejection(email)
-                }
-            }
-            is UserFormMode.Edit -> userFeedRepository.updateUser(mode.userId, name, email)
-        }
-
-    /**
-     * The repository records a refused create so whoever is showing the feed can report it. Here the form reports it
-     * itself and stays open, so the record is dropped to avoid telling the user twice.
-     */
-    private suspend fun dismissRejection(email: String) {
-        userFeedRepository.observeRejectedCreations().first()
-            .lastOrNull { it.email == email }
-            ?.let { userFeedRepository.dismissRejectedCreation(it.id) }
+    private suspend fun save(name: String, email: String): EmptyResult<DataError.Network> = when (mode) {
+        UserFormMode.Create -> userFeedRepository.createUser(name, email)
+        is UserFormMode.Edit -> userFeedRepository.updateUser(mode.userId, name, email)
     }
 
     /** Validates what will actually be saved, so stray spaces never decide whether the form is valid. */
     private fun validated(state: UserFormState): UserFormState = state.copy(
         nameError = (UserValidator.validateName(UserValidator.normalizeName(state.name)) as? Result.Error)?.error,
-        emailError = (UserValidator.validateEmail(UserValidator.normalizeEmail(state.email)) as? Result.Error)?.error,
+        emailError = (UserValidator.validateEmail(UserValidator.normalizeEmail(state.email)) as? Result.Error)?.error
     )
 
     private companion object {

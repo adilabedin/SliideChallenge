@@ -5,7 +5,6 @@ import com.androidlearning.sliide_challenge.core.domain.util.EmptyResult
 import com.androidlearning.sliide_challenge.core.domain.util.Result
 import com.androidlearning.sliide_challenge.userfeed.domain.FeedUser
 import com.androidlearning.sliide_challenge.userfeed.domain.FeedUserId
-import com.androidlearning.sliide_challenge.userfeed.domain.RejectedCreation
 import com.androidlearning.sliide_challenge.userfeed.domain.UserFeedRepository
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.NonCancellable
@@ -16,11 +15,10 @@ import kotlinx.coroutines.withContext
 
 /**
  * Records every call. A create or update returns [nextResult], first waiting for [pendingSave] when one is set, so a
- * test can observe the state while a save is in flight. A 422 create is recorded as a rejection like the real one.
+ * test can observe the state while a save is in flight.
  */
 class FakeUserFeedRepository : UserFeedRepository {
     val users = MutableStateFlow<List<FeedUser>>(emptyList())
-    val rejectedCreations = MutableStateFlow<List<RejectedCreation>>(emptyList())
 
     var nextResult: EmptyResult<DataError.Network> = Result.Success(Unit)
     var pendingSave: CompletableDeferred<Unit>? = null
@@ -46,11 +44,7 @@ class FakeUserFeedRepository : UserFeedRepository {
         createCalls += name to email
         withContext(NonCancellable) { pendingSave?.await() }
         completedSaves++
-        val result = nextResult
-        if (result is Result.Error && result.error == DataError.Network.UNPROCESSABLE_ENTITY) {
-            rejectedCreations.update { it + RejectedCreation(id = it.size + 1L, name = name, email = email) }
-        }
-        return result
+        return nextResult
     }
 
     override suspend fun refreshUsers(): EmptyResult<DataError.Network> {
@@ -76,10 +70,4 @@ class FakeUserFeedRepository : UserFeedRepository {
     override fun observeHasPendingSyncs(): Flow<Boolean> = MutableStateFlow(false)
 
     override suspend fun syncPendingChanges(): EmptyResult<DataError.Network> = Result.Success(Unit)
-
-    override fun observeRejectedCreations(): Flow<List<RejectedCreation>> = rejectedCreations
-
-    override suspend fun dismissRejectedCreation(id: Long) {
-        rejectedCreations.update { rejections -> rejections.filterNot { it.id == id } }
-    }
 }

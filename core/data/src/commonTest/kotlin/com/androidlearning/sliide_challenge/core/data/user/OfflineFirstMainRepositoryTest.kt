@@ -9,14 +9,14 @@ import com.androidlearning.sliide_challenge.core.database.user.UserEntity
 import com.androidlearning.sliide_challenge.core.domain.user.User
 import com.androidlearning.sliide_challenge.core.domain.util.DataError
 import com.androidlearning.sliide_challenge.core.domain.util.Result
+import kotlin.test.Test
+import kotlin.time.Clock
+import kotlin.time.Instant
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.test.runTest
-import kotlin.test.Test
-import kotlin.time.Clock
-import kotlin.time.Instant
 
 class OfflineFirstMainRepositoryTest {
 
@@ -52,8 +52,7 @@ class OfflineFirstMainRepositoryTest {
             rows.value = users.associateBy { it.id }
         }
 
-        override fun getAll(): Flow<List<UserEntity>> =
-            rows.map { it.values.sortedByDescending(UserEntity::id) }
+        override fun getAll(): Flow<List<UserEntity>> = rows.map { it.values.sortedByDescending(UserEntity::id) }
     }
 
     private val api = FakeMainApi()
@@ -64,7 +63,7 @@ class OfflineFirstMainRepositoryTest {
         userDao = dao,
         clock = object : Clock {
             override fun now() = this@OfflineFirstMainRepositoryTest.now
-        },
+        }
     )
 
     private val ada = UserDto(1, "Ada", "ada@x.io")
@@ -79,7 +78,7 @@ class OfflineFirstMainRepositoryTest {
 
             assertThat(repository.loadUsers()).isEqualTo(Result.Success(Unit))
             assertThat(awaitItem()).isEqualTo(
-                listOf(User(1, "Ada", "ada@x.io")),
+                listOf(User(1, "Ada", "ada@x.io"))
             )
         }
     }

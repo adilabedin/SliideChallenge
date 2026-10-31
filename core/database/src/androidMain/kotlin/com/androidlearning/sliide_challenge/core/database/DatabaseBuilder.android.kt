@@ -8,6 +8,6 @@ fun databaseBuilder(context: Context): RoomDatabase.Builder<SliideDatabase> {
     val appContext = context.applicationContext
     return Room.databaseBuilder<SliideDatabase>(
         context = appContext,
-        name = appContext.getDatabasePath(DatabaseConstants.DB_NAME).absolutePath,
+        name = appContext.getDatabasePath(DatabaseConstants.DB_NAME).absolutePath
     )
 }

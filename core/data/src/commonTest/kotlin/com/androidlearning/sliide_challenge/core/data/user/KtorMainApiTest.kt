@@ -12,8 +12,9 @@ import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.Url
 import io.ktor.http.headersOf
-import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
+import kotlinx.coroutines.test.runTest
+import kotlinx.serialization.json.Json
 
 class KtorMainApiTest {
 
@@ -23,16 +24,19 @@ class KtorMainApiTest {
         """[{"id":$id,"name":"User $id","email":"user$id@example.test","gender":"female","status":"active"}]"""
 
     /**
-     * Serves `/users?page=N`. [pageCountForRequest] is the `x-pagination-pages` value reported on each
-     * request (by request index), so tests can simulate the dataset shrinking between calls. Pages past
-     * the reported count come back empty, as GoRest does.
+     * Serves `/users?page=N`. [statusForRequest] and [pageCountForRequest] give the status and the
+     * `x-pagination-pages` value for each request (by request index). Pages past the reported count come
+     * back empty, as GoRest does.
      */
     private fun api(
         status: HttpStatusCode = HttpStatusCode.OK,
-        pageCountForRequest: (Int) -> String? = { "5" },
+        statusForRequest: (Int) -> HttpStatusCode = { status },
+        pageCountForRequest: (Int) -> String? = { "5" }
     ) = KtorMainApi(
         HttpClientFactory.create(
             apiKey = "test-token",
+            json = Json { ignoreUnknownKeys = true },
+            enableLogging = false,
             engine = MockEngine { request ->
                 val requestIndex = requestedUrls.size
                 requestedUrls += request.url
@@ -43,9 +47,9 @@ class KtorMainApiTest {
                     add(HttpHeaders.ContentType to listOf("application/json"))
                     if (pageCount != null) add("x-pagination-pages" to listOf(pageCount))
                 }
-                respond(body, status, headersOf(*headers.toTypedArray()))
-            },
-        ),
+                respond(body, statusForRequest(requestIndex), headersOf(*headers.toTypedArray()))
+            }
+        )
     )
 
     private fun requestedPages() = requestedUrls.map { it.parameters["page"] }
@@ -55,11 +59,11 @@ class KtorMainApiTest {
         val result = api().getLastPageUsers()
 
         assertThat(result).isEqualTo(
-            Result.Success(listOf(UserDto(id = 5, name = "User 5", email = "user5@example.test"))),
+            Result.Success(listOf(UserDto(id = 5, name = "User 5", email = "user5@example.test")))
         )
         assertThat(requestedUrls.map { it.toString() }).containsExactly(
             "https://gorest.co.in/public/v2/users?page=1&per_page=20",
-            "https://gorest.co.in/public/v2/users?page=5&per_page=20",
+            "https://gorest.co.in/public/v2/users?page=5&per_page=20"
         )
     }
 
@@ -68,43 +72,9 @@ class KtorMainApiTest {
         val result = api(pageCountForRequest = { "1" }).getLastPageUsers()
 
         assertThat(result).isEqualTo(
-            Result.Success(listOf(UserDto(id = 1, name = "User 1", email = "user1@example.test"))),
+            Result.Success(listOf(UserDto(id = 1, name = "User 1", email = "user1@example.test")))
         )
         assertThat(requestedPages()).containsExactly("1")
-    }
-
-    @Test
-    fun `retries the new last page when the dataset shrinks between requests`() = runTest {
-        val result = api(pageCountForRequest = { index -> if (index == 0) "5" else "4" }).getLastPageUsers()
-
-        assertThat(result).isEqualTo(
-            Result.Success(listOf(UserDto(id = 4, name = "User 4", email = "user4@example.test"))),
-        )
-        assertThat(requestedPages()).containsExactly("1", "5", "4")
-    }
-
-    @Test
-    fun `follows the new last page when the dataset grows between requests`() = runTest {
-        val result = api(pageCountForRequest = { index -> if (index == 0) "5" else "6" }).getLastPageUsers()
-
-        assertThat(result).isEqualTo(
-            Result.Success(listOf(UserDto(id = 6, name = "User 6", email = "user6@example.test"))),
-        )
-        assertThat(requestedPages()).containsExactly("1", "5", "6")
-    }
-
-    @Test
-    fun `a later refresh goes straight to the remembered last page`() = runTest {
-        val api = api()
-        api.getLastPageUsers()
-        requestedUrls.clear()
-
-        val result = api.getLastPageUsers()
-
-        assertThat(result).isEqualTo(
-            Result.Success(listOf(UserDto(id = 5, name = "User 5", email = "user5@example.test"))),
-        )
-        assertThat(requestedPages()).containsExactly("5")
     }
 
     @Test
@@ -116,11 +86,15 @@ class KtorMainApiTest {
     }
 
     @Test
-    fun `gives up when the page count changes on every request`() = runTest {
-        val result = api(pageCountForRequest = { index -> "${index + 5}" }).getLastPageUsers()
+    fun `a failure on the second request fails the whole call`() = runTest {
+        val failSecondRequest = { index: Int ->
+            if (index == 0) HttpStatusCode.OK else HttpStatusCode.InternalServerError
+        }
 
-        assertThat(result).isEqualTo(Result.Error(DataError.Network.UNKNOWN))
-        assertThat(requestedPages()).containsExactly("1", "5", "6")
+        val result = api(statusForRequest = failSecondRequest).getLastPageUsers()
+
+        assertThat(result).isEqualTo(Result.Error(DataError.Network.SERVER_ERROR))
+        assertThat(requestedPages()).containsExactly("1", "5")
     }
 
     @Test

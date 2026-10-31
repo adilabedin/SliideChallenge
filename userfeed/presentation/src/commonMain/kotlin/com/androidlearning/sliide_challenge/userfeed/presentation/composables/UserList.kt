@@ -34,14 +34,14 @@ fun UserList(
     listState: LazyListState,
     onUserClick: (FeedUserUi) -> Unit,
     onUserLongClick: (FeedUserUi) -> Unit,
-    modifier: Modifier = Modifier,
+    modifier: Modifier = Modifier
 ) {
     ScrollToTopOnUserCreated(users = users, listState = listState)
     LazyColumn(
         state = listState,
         modifier = modifier,
         // Room for the FAB, so it never covers the last row.
-        contentPadding = PaddingValues(bottom = 88.dp),
+        contentPadding = PaddingValues(bottom = 88.dp)
     ) {
         items(items = users, key = { it.id.listKey() }) { user ->
             Column(modifier = Modifier.animateItem()) {
@@ -52,7 +52,7 @@ fun UserList(
                     // Beside the details on a wide screen, the row shows whose details they are.
                     isOpened = mode == FeedMode.Browse && user.id == openedUserId,
                     onClick = { onUserClick(user) },
-                    onLongClick = { onUserLongClick(user) },
+                    onLongClick = { onUserLongClick(user) }
                 )
                 HorizontalDivider()
             }
@@ -67,10 +67,7 @@ fun UserList(
  * returning from the form, when the feed has been out of composition while the user was created.
  */
 @Composable
-private fun ScrollToTopOnUserCreated(
-    users: List<FeedUserUi>,
-    listState: LazyListState,
-) {
+private fun ScrollToTopOnUserCreated(users: List<FeedUserUi>, listState: LazyListState) {
     val newestCreatedId = users.maxOfOrNull { (it.id as? FeedUserId.Created)?.localId ?: 0L } ?: 0L
     var highestSeenId by rememberSaveable { mutableLongStateOf(newestCreatedId) }
     LaunchedEffect(newestCreatedId) {
@@ -88,14 +85,20 @@ private fun UserListPreview() {
         UserList(
             users = listOf(
                 FeedUserUi(FeedUserId.Created(1), "Grace Hopper", "grace@example.com", SyncStatus.NotSynced, false),
-                FeedUserUi(FeedUserId.Remote(1), "Ada Lovelace", "ada@example.com", SyncStatus.Synced(TimeAgo.Minutes(5)), true),
+                FeedUserUi(
+                    FeedUserId.Remote(1),
+                    "Ada Lovelace",
+                    "ada@example.com",
+                    SyncStatus.Synced(TimeAgo.Minutes(5)),
+                    true
+                )
             ),
             mode = FeedMode.Browse,
             selectedIds = emptySet(),
             openedUserId = FeedUserId.Remote(1),
             listState = rememberLazyListState(),
             onUserClick = {},
-            onUserLongClick = {},
+            onUserLongClick = {}
         )
     }
 }

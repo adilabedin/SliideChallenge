@@ -46,7 +46,7 @@ private val LightColors = lightColorScheme(
     surfaceContainerLow = Color(0xFFF0F2F5),
     surfaceContainer = Color(0xFFEAEDF1),
     surfaceContainerHigh = Color(0xFFE4E7EC),
-    surfaceContainerHighest = Color(0xFFDEE2E8),
+    surfaceContainerHighest = Color(0xFFDEE2E8)
 )
 
 private val DarkColors = darkColorScheme(
@@ -85,16 +85,13 @@ private val DarkColors = darkColorScheme(
     surfaceContainerLow = Color(0xFF14171C),
     surfaceContainer = Color(0xFF181B21),
     surfaceContainerHigh = Color(0xFF1F232A),
-    surfaceContainerHighest = Color(0xFF272B33),
+    surfaceContainerHighest = Color(0xFF272B33)
 )
 
 @Composable
-fun SliideTheme(
-    darkTheme: Boolean = isSystemInDarkTheme(),
-    content: @Composable () -> Unit,
-) {
+fun SliideTheme(darkTheme: Boolean = isSystemInDarkTheme(), content: @Composable () -> Unit) {
     MaterialTheme(
         colorScheme = if (darkTheme) DarkColors else LightColors,
-        content = content,
+        content = content
     )
 }

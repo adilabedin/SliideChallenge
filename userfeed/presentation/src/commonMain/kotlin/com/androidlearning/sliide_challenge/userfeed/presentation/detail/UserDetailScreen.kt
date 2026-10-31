@@ -56,7 +56,7 @@ fun UserDetailRoot(
     showBackButton: Boolean,
     onClose: () -> Unit,
     onDeleteConfirmed: (FeedUserId) -> Unit,
-    viewModel: UserDetailViewModel = koinViewModel { parametersOf(userId) },
+    viewModel: UserDetailViewModel = koinViewModel { parametersOf(userId) }
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
 
@@ -70,21 +70,17 @@ fun UserDetailRoot(
     UserDetailScreen(
         state = state,
         onAction = viewModel::onAction,
-        onBackClick = onClose.takeIf { showBackButton },
+        onBackClick = onClose.takeIf { showBackButton }
     )
 }
 
 @Composable
-fun UserDetailScreen(
-    state: UserDetailState,
-    onAction: (UserDetailAction) -> Unit,
-    onBackClick: (() -> Unit)?,
-) {
+fun UserDetailScreen(state: UserDetailState, onAction: (UserDetailAction) -> Unit, onBackClick: (() -> Unit)?) {
     // System back drops the unsaved edit before it leaves the screen.
     NavigationBackHandler(
         state = rememberNavigationEventState(NavigationEventInfo.None),
         isBackEnabled = state.isEditing,
-        onBackCompleted = { onAction(UserDetailAction.OnCancelEditClick) },
+        onBackCompleted = { onAction(UserDetailAction.OnCancelEditClick) }
     )
 
     Scaffold(
@@ -97,16 +93,16 @@ fun UserDetailScreen(
                 onBackClick = onBackClick,
                 onEditClick = { onAction(UserDetailAction.OnEditClick) },
                 onSaveClick = { onAction(UserDetailAction.OnSaveClick) },
-                onCancelEditClick = { onAction(UserDetailAction.OnCancelEditClick) },
+                onCancelEditClick = { onAction(UserDetailAction.OnCancelEditClick) }
             )
-        },
+        }
     ) { innerPadding ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
                 .imePadding(),
-            horizontalAlignment = Alignment.CenterHorizontally,
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
             if (state.isLoading) {
                 LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
@@ -120,13 +116,13 @@ fun UserDetailScreen(
                     .verticalScroll(rememberScrollState())
                     .padding(horizontal = 24.dp, vertical = 16.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 UserAvatar()
                 Spacer(modifier = Modifier.height(8.dp))
                 AnimatedContent(
                     targetState = state.isEditing,
-                    transitionSpec = { fadeIn() togetherWith fadeOut() },
+                    transitionSpec = { fadeIn() togetherWith fadeOut() }
                 ) { isEditing ->
                     if (isEditing) {
                         UserFields(
@@ -141,7 +137,7 @@ fun UserDetailScreen(
                             onEmailChange = { onAction(UserDetailAction.OnEmailChange(it)) },
                             onNameFocusLost = { onAction(UserDetailAction.OnNameFocusLost) },
                             onEmailFocusLost = { onAction(UserDetailAction.OnEmailFocusLost) },
-                            onDone = { onAction(UserDetailAction.OnSaveClick) },
+                            onDone = { onAction(UserDetailAction.OnSaveClick) }
                         )
                     } else {
                         state.user?.let { user ->
@@ -149,7 +145,7 @@ fun UserDetailScreen(
                                 name = user.name,
                                 email = user.email,
                                 syncStatus = user.syncStatus.asString(),
-                                isSynced = user.isSynced,
+                                isSynced = user.isSynced
                             )
                         }
                     }
@@ -160,7 +156,7 @@ fun UserDetailScreen(
                 enabled = state.user != null && !state.isSaving,
                 modifier = Modifier
                     .widthIn(max = 560.dp)
-                    .padding(horizontal = 24.dp, vertical = 16.dp),
+                    .padding(horizontal = 24.dp, vertical = 16.dp)
             )
         }
     }
@@ -171,12 +167,13 @@ fun UserDetailScreen(
             name = user.name,
             email = user.email,
             onConfirm = { onAction(UserDetailAction.OnDeleteConfirm) },
-            onDismiss = { onAction(UserDetailAction.OnDeleteDismiss) },
+            onDismiss = { onAction(UserDetailAction.OnDeleteDismiss) }
         )
     }
 }
 
-private val previewUser = FeedUserUi(FeedUserId.Remote(1), "Ada Lovelace", "ada@example.com", SyncStatus.Synced(TimeAgo.Minutes(5)), true)
+private val previewUser =
+    FeedUserUi(FeedUserId.Remote(1), "Ada Lovelace", "ada@example.com", SyncStatus.Synced(TimeAgo.Minutes(5)), true)
 
 @Preview
 @Composable
@@ -185,7 +182,7 @@ private fun UserDetailScreenPreview() {
         UserDetailScreen(
             state = UserDetailState(isLoading = false, user = previewUser),
             onAction = {},
-            onBackClick = {},
+            onBackClick = {}
         )
     }
 }
@@ -200,10 +197,10 @@ private fun UserDetailScreenEditingPreview() {
                 user = previewUser,
                 isEditing = true,
                 name = "Ada King",
-                email = "ada@example.com",
+                email = "ada@example.com"
             ),
             onAction = {},
-            onBackClick = {},
+            onBackClick = {}
         )
     }
 }

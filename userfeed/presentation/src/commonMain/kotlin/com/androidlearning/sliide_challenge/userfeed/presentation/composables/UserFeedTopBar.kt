@@ -45,14 +45,15 @@ import org.jetbrains.compose.resources.stringResource
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun UserFeedTopBar(
-    mode: FeedMode,
-    selectedCount: Int,
-    canChangeMode: Boolean,
-    onAction: (UserFeedAction) -> Unit,
-) {
+fun UserFeedTopBar(mode: FeedMode, selectedCount: Int, canChangeMode: Boolean, onAction: (UserFeedAction) -> Unit) {
     val containerColor by animateColorAsState(
-        if (mode == FeedMode.Browse) MaterialTheme.colorScheme.surface else MaterialTheme.colorScheme.secondaryContainer,
+        if (mode ==
+            FeedMode.Browse
+        ) {
+            MaterialTheme.colorScheme.surface
+        } else {
+            MaterialTheme.colorScheme.secondaryContainer
+        }
     )
     TopAppBar(
         colors = TopAppBarDefaults.topAppBarColors(containerColor = containerColor),
@@ -60,13 +61,15 @@ fun UserFeedTopBar(
             Text(
                 when (mode) {
                     FeedMode.Browse -> stringResource(Res.string.feed_title)
+
                     FeedMode.Edit -> stringResource(Res.string.feed_title_edit_mode)
+
                     FeedMode.Delete -> if (selectedCount == 0) {
                         stringResource(Res.string.feed_title_select_users)
                     } else {
                         stringResource(Res.string.feed_title_selected_count, selectedCount)
                     }
-                },
+                }
             )
         },
         navigationIcon = {
@@ -79,28 +82,31 @@ fun UserFeedTopBar(
         actions = {
             when (mode) {
                 FeedMode.Browse -> FeedOverflowMenu(enabled = canChangeMode, onAction = onAction)
+
                 FeedMode.Edit -> Unit
+
                 FeedMode.Delete -> IconButton(
                     onClick = { onAction(UserFeedAction.OnDeleteSelectedClick) },
-                    enabled = selectedCount > 0,
+                    enabled = selectedCount > 0
                 ) {
                     Icon(Icons.Default.Delete, contentDescription = stringResource(Res.string.feed_delete_selected))
                 }
             }
-        },
+        }
     )
 }
 
 @Composable
-private fun FeedOverflowMenu(
-    enabled: Boolean,
-    onAction: (UserFeedAction) -> Unit,
-) {
+private fun FeedOverflowMenu(enabled: Boolean, onAction: (UserFeedAction) -> Unit) {
     var isExpanded by remember { mutableStateOf(false) }
     Box {
         IconButton(onClick = { isExpanded = true }, enabled = enabled) {
             // The core icon set has no horizontal "more" icon, so the vertical one is turned on its side.
-            Icon(Icons.Default.MoreVert, contentDescription = stringResource(Res.string.feed_more_options), modifier = Modifier.rotate(90f))
+            Icon(
+                Icons.Default.MoreVert,
+                contentDescription = stringResource(Res.string.feed_more_options),
+                modifier = Modifier.rotate(90f)
+            )
         }
         DropdownMenu(expanded = isExpanded, onDismissRequest = { isExpanded = false }) {
             DropdownMenuItem(
@@ -109,7 +115,7 @@ private fun FeedOverflowMenu(
                 onClick = {
                     isExpanded = false
                     onAction(UserFeedAction.OnEditModeClick)
-                },
+                }
             )
             DropdownMenuItem(
                 text = { Text(stringResource(Res.string.action_delete)) },
@@ -117,7 +123,7 @@ private fun FeedOverflowMenu(
                 onClick = {
                     isExpanded = false
                     onAction(UserFeedAction.OnDeleteModeClick)
-                },
+                }
             )
         }
     }

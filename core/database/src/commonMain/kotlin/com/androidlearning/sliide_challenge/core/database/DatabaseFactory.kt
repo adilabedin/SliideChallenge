@@ -8,9 +8,8 @@ import kotlinx.coroutines.IO
 object DatabaseFactory {
 
     /** Takes the platform `databaseBuilder(...)` (or an in-memory builder in tests). */
-    fun create(builder: RoomDatabase.Builder<SliideDatabase>): SliideDatabase =
-        builder
-            .setDriver(BundledSQLiteDriver())
-            .setQueryCoroutineContext(Dispatchers.IO)
-            .build()
+    fun create(builder: RoomDatabase.Builder<SliideDatabase>): SliideDatabase = builder
+        .setDriver(BundledSQLiteDriver())
+        .setQueryCoroutineContext(Dispatchers.IO)
+        .build()
 }

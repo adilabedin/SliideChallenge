@@ -34,7 +34,7 @@ fun Modifier.shimmer(): Modifier = composed {
         initialValue = 0f,
         targetValue = 1f,
         animationSpec = infiniteRepeatable(tween(durationMillis = 1_200, easing = LinearEasing), RepeatMode.Restart),
-        label = "shimmer-progress",
+        label = "shimmer-progress"
     )
     drawBehind {
         // The highlight starts fully off the left edge and leaves fully past the right one.
@@ -44,24 +44,20 @@ fun Modifier.shimmer(): Modifier = composed {
             Brush.linearGradient(
                 colors = listOf(base, highlight, base),
                 start = Offset(start, 0f),
-                end = Offset(start + bandWidth, size.height),
-            ),
+                end = Offset(start + bandWidth, size.height)
+            )
         )
     }
 }
 
 /** A rounded shimmering block, sized like the text or image it stands in for. */
 @Composable
-fun ShimmerBlock(
-    modifier: Modifier = Modifier,
-    height: Dp = 16.dp,
-    shape: Shape = RoundedCornerShape(4.dp),
-) {
+fun ShimmerBlock(modifier: Modifier = Modifier, height: Dp = 16.dp, shape: Shape = RoundedCornerShape(4.dp)) {
     Box(
         modifier = modifier
             .height(height)
             .clip(shape)
             .background(MaterialTheme.colorScheme.surfaceContainerHighest)
-            .shimmer(),
+            .shimmer()
     )
 }

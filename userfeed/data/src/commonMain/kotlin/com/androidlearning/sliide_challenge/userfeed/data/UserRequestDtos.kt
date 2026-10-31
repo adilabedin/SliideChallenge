@@ -8,12 +8,7 @@ import kotlinx.serialization.Serializable
  * properties left at their default, which would drop them from the request.
  */
 @Serializable
-data class CreateUserRequestDto(
-    val name: String,
-    val email: String,
-    val gender: String,
-    val status: String,
-) {
+data class CreateUserRequestDto(val name: String, val email: String, val gender: String, val status: String) {
     companion object {
         const val DEFAULT_GENDER = "female"
         const val DEFAULT_STATUS = "active"
@@ -22,7 +17,4 @@ data class CreateUserRequestDto(
 
 /** Body of `PATCH /users/{id}`; only the fields the app edits. */
 @Serializable
-data class UpdateUserRequestDto(
-    val name: String,
-    val email: String,
-)
+data class UpdateUserRequestDto(val name: String, val email: String)

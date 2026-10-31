@@ -17,7 +17,7 @@ import kotlinx.coroutines.withContext
  */
 class PendingSyncScheduling(
     private val userFeedRepository: UserFeedRepository,
-    private val userSyncScheduler: UserSyncScheduler,
+    private val userSyncScheduler: UserSyncScheduler
 ) {
     fun start(scope: CoroutineScope) {
         userFeedRepository.observeHasPendingSyncs()

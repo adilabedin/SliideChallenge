@@ -6,11 +6,11 @@ import assertk.assertions.containsExactly
 import assertk.assertions.isEmpty
 import com.androidlearning.sliide_challenge.core.database.DatabaseFactory
 import com.androidlearning.sliide_challenge.core.database.SliideDatabase
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.test.runTest
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.test.runTest
 
 class UserDaoTest {
 
@@ -69,7 +69,7 @@ class UserDaoTest {
 
         assertThat(dao.getAll().first()).containsExactly(
             user(id = 2),
-            user(id = 1, name = "Edited").copy(email = "edited@example.com"),
+            user(id = 1, name = "Edited").copy(email = "edited@example.com")
         )
     }
 
@@ -102,6 +102,6 @@ class UserDaoTest {
         id = id,
         name = name,
         email = "user$id@example.com",
-        lastSyncedAt = lastSyncedAt,
+        lastSyncedAt = lastSyncedAt
     )
 }

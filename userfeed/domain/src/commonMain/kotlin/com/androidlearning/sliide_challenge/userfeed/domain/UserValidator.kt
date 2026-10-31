@@ -8,13 +8,13 @@ enum class NameValidationError : Error {
     EMPTY,
     TOO_SHORT,
     TOO_LONG,
-    INVALID_CHARACTERS,
+    INVALID_CHARACTERS
 }
 
 enum class EmailValidationError : Error {
     EMPTY,
     TOO_LONG,
-    INVALID_FORMAT,
+    INVALID_FORMAT
 }
 
 /**
@@ -43,7 +43,7 @@ object UserValidator {
      */
     private val EMAIL_PATTERN = Regex(
         "^[A-Za-z0-9!#$%&'*+/=?^_`{|}~-]+(\\.[A-Za-z0-9!#$%&'*+/=?^_`{|}~-]+)*" +
-            "@([A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?\\.)+[A-Za-z]{2,63}$",
+            "@([A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?\\.)+[A-Za-z]{2,63}$"
     )
 
     private val WHITESPACE_RUN = Regex("\\s+")

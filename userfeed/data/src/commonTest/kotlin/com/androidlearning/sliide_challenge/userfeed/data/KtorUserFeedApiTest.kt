@@ -14,11 +14,11 @@ import io.ktor.http.HttpMethod
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.content.TextContent
 import io.ktor.http.headersOf
+import kotlin.test.Test
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
-import kotlin.test.Test
 
 class KtorUserFeedApiTest {
 
@@ -27,11 +27,13 @@ class KtorUserFeedApiTest {
     private fun api(status: HttpStatusCode, body: String = "") = KtorUserFeedApi(
         HttpClientFactory.create(
             apiKey = "test-token",
+            json = Json { ignoreUnknownKeys = true },
+            enableLogging = false,
             engine = MockEngine { request ->
                 requests += request
                 respond(body, status, headersOf(HttpHeaders.ContentType, "application/json"))
-            },
-        ),
+            }
+        )
     )
 
     private val userJson = """{"id":7,"name":"Ada","email":"ada@x.io","gender":"female","status":"active"}"""
@@ -53,9 +55,9 @@ class KtorUserFeedApiTest {
                     "name" to JsonPrimitive("Ada"),
                     "email" to JsonPrimitive("ada@x.io"),
                     "gender" to JsonPrimitive(CreateUserRequestDto.DEFAULT_GENDER),
-                    "status" to JsonPrimitive(CreateUserRequestDto.DEFAULT_STATUS),
-                ),
-            ),
+                    "status" to JsonPrimitive(CreateUserRequestDto.DEFAULT_STATUS)
+                )
+            )
         )
     }
 
@@ -75,7 +77,7 @@ class KtorUserFeedApiTest {
         assertThat(request.method).isEqualTo(HttpMethod.Patch)
         assertThat(request.url.toString()).isEqualTo("https://gorest.co.in/public/v2/users/7")
         assertThat(request.jsonBody()).isEqualTo(
-            JsonObject(mapOf("name" to JsonPrimitive("Ada"), "email" to JsonPrimitive("ada@x.io"))),
+            JsonObject(mapOf("name" to JsonPrimitive("Ada"), "email" to JsonPrimitive("ada@x.io")))
         )
     }
 

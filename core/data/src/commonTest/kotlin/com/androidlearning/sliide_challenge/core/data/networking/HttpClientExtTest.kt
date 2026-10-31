@@ -17,28 +17,30 @@ import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpMethod
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.headersOf
+import kotlin.test.Test
 import kotlinx.coroutines.test.runTest
+import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonPrimitive
-import kotlin.test.Test
 
 class HttpClientExtTest {
 
     private var lastRequest: HttpRequestData? = null
     private var lastRequestBody: String? = null
 
-    private fun client(
-        handler: suspend MockRequestHandleScope.(HttpRequestData) -> HttpResponseData,
-    ) = HttpClientFactory.create(
-        apiKey = "test-token",
-        engine = MockEngine { request ->
-            lastRequest = request
-            lastRequestBody = request.body.toByteArray().decodeToString()
-            handler(request)
-        },
-    )
+    private fun client(handler: suspend MockRequestHandleScope.(HttpRequestData) -> HttpResponseData) =
+        HttpClientFactory.create(
+            apiKey = "test-token",
+            json = Json { ignoreUnknownKeys = true },
+            enableLogging = false,
+            engine = MockEngine { request ->
+                lastRequest = request
+                lastRequestBody = request.body.toByteArray().decodeToString()
+                handler(request)
+            }
+        )
 
     private fun MockRequestHandleScope.json(body: String, status: HttpStatusCode = HttpStatusCode.OK) =
         respond(body, status, headersOf(HttpHeaders.ContentType, "application/json"))
@@ -49,7 +51,7 @@ class HttpClientExtTest {
             respond(
                 """[{"id":1,"name":"Ada"}]""",
                 HttpStatusCode.OK,
-                headersOf(HttpHeaders.ContentType to listOf("application/json"), "x-pagination-pages" to listOf("7")),
+                headersOf(HttpHeaders.ContentType to listOf("application/json"), "x-pagination-pages" to listOf("7"))
             )
         }
 
@@ -104,7 +106,7 @@ class HttpClientExtTest {
             429 to DataError.Network.TOO_MANY_REQUESTS,
             500 to DataError.Network.SERVER_ERROR,
             503 to DataError.Network.SERVICE_UNAVAILABLE,
-            302 to DataError.Network.UNKNOWN,
+            302 to DataError.Network.UNKNOWN
         )
         expectations.forEach { (status, expected) ->
             val client = client { json("{}", HttpStatusCode.fromValue(status)) }

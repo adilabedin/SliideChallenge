@@ -17,19 +17,19 @@ import platform.UIKit.UIApplicationDidBecomeActiveNotification
 class IosUserSync(
     private val userFeedRepository: UserFeedRepository,
     private val userSyncScheduler: UserSyncScheduler,
-    private val pendingSyncScheduling: PendingSyncScheduling,
+    private val pendingSyncScheduling: PendingSyncScheduling
 ) {
     /** iOS requires the task handler to be registered before the app finishes launching. */
     fun start(scope: CoroutineScope) {
         BGTaskScheduler.sharedScheduler.registerForTaskWithIdentifier(
             identifier = BackgroundTaskUserSyncScheduler.TASK_IDENTIFIER,
-            usingQueue = null,
+            usingQueue = null
         ) { task -> task?.let { runBackgroundTask(it, scope) } }
         pendingSyncScheduling.start(scope)
         NSNotificationCenter.defaultCenter.addObserverForName(
             name = UIApplicationDidBecomeActiveNotification,
             `object` = null,
-            queue = NSOperationQueue.mainQueue,
+            queue = NSOperationQueue.mainQueue
         ) { _ -> scope.launch { sync() } }
     }
 

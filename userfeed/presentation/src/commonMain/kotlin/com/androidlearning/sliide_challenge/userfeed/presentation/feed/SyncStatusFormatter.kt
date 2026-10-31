@@ -7,12 +7,12 @@ import com.androidlearning.sliide_challenge.userfeed.presentation.resources.sync
 import com.androidlearning.sliide_challenge.userfeed.presentation.resources.sync_status_synced_hours_ago
 import com.androidlearning.sliide_challenge.userfeed.presentation.resources.sync_status_synced_just_now
 import com.androidlearning.sliide_challenge.userfeed.presentation.resources.sync_status_synced_minutes_ago
-import org.jetbrains.compose.resources.pluralStringResource
-import org.jetbrains.compose.resources.stringResource
 import kotlin.time.Duration.Companion.days
 import kotlin.time.Duration.Companion.hours
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Instant
+import org.jetbrains.compose.resources.pluralStringResource
+import org.jetbrains.compose.resources.stringResource
 
 /** Whether a user's last change has reached the server, kept as data so the wording lives in string resources. */
 sealed interface SyncStatus {
@@ -45,13 +45,13 @@ fun timeAgo(then: Instant, now: Instant): TimeAgo {
 
 /** e.g. "Synced 5 minutes ago" or "Not synced". */
 @Composable
-fun SyncStatus.asString(): String =
-    when (this) {
-        SyncStatus.NotSynced -> stringResource(Res.string.sync_status_not_synced)
-        is SyncStatus.Synced -> when (ago) {
-            TimeAgo.JustNow -> stringResource(Res.string.sync_status_synced_just_now)
-            is TimeAgo.Minutes -> pluralStringResource(Res.plurals.sync_status_synced_minutes_ago, ago.count, ago.count)
-            is TimeAgo.Hours -> pluralStringResource(Res.plurals.sync_status_synced_hours_ago, ago.count, ago.count)
-            is TimeAgo.Days -> pluralStringResource(Res.plurals.sync_status_synced_days_ago, ago.count, ago.count)
-        }
+fun SyncStatus.asString(): String = when (this) {
+    SyncStatus.NotSynced -> stringResource(Res.string.sync_status_not_synced)
+
+    is SyncStatus.Synced -> when (ago) {
+        TimeAgo.JustNow -> stringResource(Res.string.sync_status_synced_just_now)
+        is TimeAgo.Minutes -> pluralStringResource(Res.plurals.sync_status_synced_minutes_ago, ago.count, ago.count)
+        is TimeAgo.Hours -> pluralStringResource(Res.plurals.sync_status_synced_hours_ago, ago.count, ago.count)
+        is TimeAgo.Days -> pluralStringResource(Res.plurals.sync_status_synced_days_ago, ago.count, ago.count)
     }
+}

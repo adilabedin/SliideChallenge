@@ -15,7 +15,9 @@ fun CreatedUserEntity.toFeedUser(pendingEdit: UpdateUserPendingSyncEntity? = nul
     id = FeedUserId.Created(localId),
     name = name,
     email = email,
-    lastSyncedAt = lastSyncedAt?.takeIf { remoteId != null && pendingEdit == null }?.let(Instant::fromEpochMilliseconds),
+    lastSyncedAt = lastSyncedAt?.takeIf {
+        remoteId != null && pendingEdit == null
+    }?.let(Instant::fromEpochMilliseconds)
 )
 
 /**
@@ -26,5 +28,5 @@ fun UserEntity.toFeedUser(pendingEdit: UpdateUserPendingSyncEntity? = null): Fee
     id = FeedUserId.Remote(id),
     name = pendingEdit?.name ?: name,
     email = pendingEdit?.email ?: email,
-    lastSyncedAt = if (pendingEdit == null) Instant.fromEpochMilliseconds(lastSyncedAt) else null,
+    lastSyncedAt = if (pendingEdit == null) Instant.fromEpochMilliseconds(lastSyncedAt) else null
 )

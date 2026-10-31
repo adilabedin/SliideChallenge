@@ -8,11 +8,11 @@ import assertk.assertions.isNotEqualTo
 import assertk.assertions.isNull
 import com.androidlearning.sliide_challenge.core.database.DatabaseFactory
 import com.androidlearning.sliide_challenge.core.database.SliideDatabase
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.test.runTest
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.test.runTest
 
 class CreatedUserDaoTest {
 
@@ -106,6 +106,6 @@ class CreatedUserDaoTest {
     private fun createdUser(name: String = "User", createdAt: Long = 1_000) = CreatedUserEntity(
         name = name,
         email = "${name.lowercase()}@example.com",
-        createdAt = createdAt,
+        createdAt = createdAt
     )
 }

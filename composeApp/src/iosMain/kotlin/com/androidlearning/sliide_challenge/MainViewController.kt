@@ -9,7 +9,7 @@ import androidx.compose.ui.window.ComposeUIViewController
  * again as the keyboard opens, and a field needs a second tap.
  */
 fun MainViewController() = ComposeUIViewController(
-    configure = { onFocusBehavior = OnFocusBehavior.DoNothing },
+    configure = { onFocusBehavior = OnFocusBehavior.DoNothing }
 ) {
     App()
 }

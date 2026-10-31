@@ -44,7 +44,7 @@ interface UserPendingSyncDao {
 
     /** Removes the edit only if it is still the one that was sent, so a newer edit queued meanwhile is kept. */
     @Query(
-        "DELETE FROM ${DatabaseConstants.UPDATE_USER_PENDING_SYNCS_TABLE} WHERE userId = :userId AND updatedAt = :updatedAt",
+        "DELETE FROM ${DatabaseConstants.UPDATE_USER_PENDING_SYNCS_TABLE} WHERE userId = :userId AND updatedAt = :updatedAt"
     )
     suspend fun deleteUpdatePendingSyncIfUnchanged(userId: Long, updatedAt: Long)
 
@@ -68,7 +68,7 @@ interface UserPendingSyncDao {
     @Query(
         "SELECT EXISTS(SELECT 1 FROM ${DatabaseConstants.CREATE_USER_PENDING_SYNCS_TABLE}) " +
             "OR EXISTS(SELECT 1 FROM ${DatabaseConstants.UPDATE_USER_PENDING_SYNCS_TABLE}) " +
-            "OR EXISTS(SELECT 1 FROM ${DatabaseConstants.DELETE_USER_PENDING_SYNCS_TABLE})",
+            "OR EXISTS(SELECT 1 FROM ${DatabaseConstants.DELETE_USER_PENDING_SYNCS_TABLE})"
     )
     fun observeHasPendingSyncs(): Flow<Boolean>
 }

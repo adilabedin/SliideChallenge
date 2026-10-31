@@ -10,9 +10,7 @@ interface DatabaseTransactionRunner {
 }
 
 /** DAO calls made inside the block run on the transaction's connection, so they join it. */
-class RoomTransactionRunner(
-    private val database: SliideDatabase,
-) : DatabaseTransactionRunner {
+class RoomTransactionRunner(private val database: SliideDatabase) : DatabaseTransactionRunner {
     override suspend fun <R> runInTransaction(block: suspend () -> R): R =
         database.useWriterConnection { transactor -> transactor.immediateTransaction { block() } }
 }

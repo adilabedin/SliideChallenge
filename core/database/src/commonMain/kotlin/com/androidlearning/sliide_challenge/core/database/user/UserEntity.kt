@@ -10,9 +10,4 @@ import com.androidlearning.sliide_challenge.core.database.DatabaseConstants
  * GoRest has no timestamps of its own, so this is what the feed's relative timestamp shows.
  */
 @Entity(tableName = DatabaseConstants.USERS_TABLE)
-data class UserEntity(
-    @PrimaryKey val id: Long,
-    val name: String,
-    val email: String,
-    val lastSyncedAt: Long,
-)
+data class UserEntity(@PrimaryKey val id: Long, val name: String, val email: String, val lastSyncedAt: Long)

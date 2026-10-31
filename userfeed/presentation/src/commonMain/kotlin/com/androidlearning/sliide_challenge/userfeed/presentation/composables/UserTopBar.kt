@@ -50,10 +50,10 @@ fun UserTopBar(
     onEditClick: () -> Unit,
     onSaveClick: () -> Unit,
     onCancelEditClick: () -> Unit,
-    modifier: Modifier = Modifier,
+    modifier: Modifier = Modifier
 ) {
     val containerColor by animateColorAsState(
-        if (isEditing) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surface,
+        if (isEditing) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surface
     )
     TopAppBar(
         modifier = modifier,
@@ -66,14 +66,17 @@ fun UserTopBar(
                 }
             } else if (onBackClick != null) {
                 IconButton(onClick = onBackClick) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(Res.string.action_back))
+                    Icon(
+                        Icons.AutoMirrored.Filled.ArrowBack,
+                        contentDescription = stringResource(Res.string.action_back)
+                    )
                 }
             }
         },
         actions = {
             AnimatedContent(
                 targetState = isEditing,
-                transitionSpec = { fadeIn() togetherWith fadeOut() },
+                transitionSpec = { fadeIn() togetherWith fadeOut() }
             ) { editing ->
                 if (editing) {
                     TextButton(onClick = onSaveClick, enabled = canSave) {
@@ -89,7 +92,7 @@ fun UserTopBar(
                     }
                 }
             }
-        },
+        }
     )
 }
 
@@ -105,7 +108,7 @@ private fun UserTopBarPreview() {
             onBackClick = {},
             onEditClick = {},
             onSaveClick = {},
-            onCancelEditClick = {},
+            onCancelEditClick = {}
         )
     }
 }
@@ -122,7 +125,7 @@ private fun UserTopBarEditingPreview() {
             onBackClick = {},
             onEditClick = {},
             onSaveClick = {},
-            onCancelEditClick = {},
+            onCancelEditClick = {}
         )
     }
 }
