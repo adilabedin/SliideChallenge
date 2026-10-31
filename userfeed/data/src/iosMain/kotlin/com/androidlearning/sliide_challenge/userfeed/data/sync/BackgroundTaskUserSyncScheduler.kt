@@ -1,5 +1,6 @@
 package com.androidlearning.sliide_challenge.userfeed.data.sync
 
+import com.androidlearning.sliide_challenge.userfeed.domain.PendingUserChange
 import com.androidlearning.sliide_challenge.userfeed.domain.UserSyncScheduler
 import kotlinx.cinterop.BetaInteropApi
 import kotlinx.cinterop.ExperimentalForeignApi
@@ -33,6 +34,13 @@ class BackgroundTaskUserSyncScheduler : UserSyncScheduler {
             }
         }
     }
+
+    /**
+     * iOS has no per-change background work (no network constraint or backoff for one task per change), so a failed
+     * change waits for the refresh booked when it was saved, or for the sync that runs whenever the app becomes active.
+     * Rebooking here would only push that refresh further out.
+     */
+    override fun scheduleChangeSync(change: PendingUserChange) = Unit
 
     override fun cancelSync() {
         BGTaskScheduler.sharedScheduler.cancelTaskRequestWithIdentifier(TASK_IDENTIFIER)

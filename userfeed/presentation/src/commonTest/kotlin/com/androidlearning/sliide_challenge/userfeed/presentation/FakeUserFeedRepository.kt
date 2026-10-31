@@ -5,6 +5,7 @@ import com.androidlearning.sliide_challenge.core.domain.util.EmptyResult
 import com.androidlearning.sliide_challenge.core.domain.util.Result
 import com.androidlearning.sliide_challenge.userfeed.domain.FeedUser
 import com.androidlearning.sliide_challenge.userfeed.domain.FeedUserId
+import com.androidlearning.sliide_challenge.userfeed.domain.PendingUserChange
 import com.androidlearning.sliide_challenge.userfeed.domain.UserFeedRepository
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.NonCancellable
@@ -81,4 +82,6 @@ class FakeUserFeedRepository : UserFeedRepository {
     override fun observeHasPendingSyncs(): Flow<Boolean> = MutableStateFlow(false)
 
     override suspend fun syncPendingChanges(): EmptyResult<DataError.Network> = Result.Success(Unit)
+
+    override suspend fun syncChange(change: PendingUserChange): EmptyResult<DataError.Network> = Result.Success(Unit)
 }

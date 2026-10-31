@@ -9,7 +9,6 @@ kotlin {
             implementation(projects.core.data)
             implementation(projects.core.database)
             implementation(projects.userfeed.domain)
-            implementation(projects.userfeed.database)
             implementation(libs.koin.core)
         }
         androidMain.dependencies {

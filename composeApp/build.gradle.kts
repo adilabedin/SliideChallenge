@@ -13,7 +13,6 @@ kotlin {
 
             implementation(projects.userfeed.domain)
             implementation(projects.userfeed.data)
-            implementation(projects.userfeed.database)
             implementation(projects.userfeed.presentation)
         }
     }

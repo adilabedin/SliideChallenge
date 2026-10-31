@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "database": {
     "version": 1,
-    "identityHash": "fd7206a24e4448dddd1c94edca974d79",
+    "identityHash": "64ec34c2a712e6590786daef3111d28c",
     "entities": [
       {
         "tableName": "UsersTable",
@@ -42,7 +42,7 @@
       },
       {
         "tableName": "CreatedUsersTable",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`localId` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `remoteId` INTEGER, `name` TEXT NOT NULL, `email` TEXT NOT NULL, `createdAt` INTEGER NOT NULL, `lastSyncedAt` INTEGER)",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`localId` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `remoteId` INTEGER, `name` TEXT NOT NULL, `email` TEXT NOT NULL, `createdAt` INTEGER NOT NULL, `lastSyncedAt` INTEGER, `wasSent` INTEGER NOT NULL)",
         "fields": [
           {
             "fieldPath": "localId",
@@ -77,24 +77,6 @@
             "fieldPath": "lastSyncedAt",
             "columnName": "lastSyncedAt",
             "affinity": "INTEGER"
-          }
-        ],
-        "primaryKey": {
-          "autoGenerate": true,
-          "columnNames": [
-            "localId"
-          ]
-        }
-      },
-      {
-        "tableName": "CreateUserPendingSyncsTable",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`localId` INTEGER NOT NULL, `wasSent` INTEGER NOT NULL, PRIMARY KEY(`localId`))",
-        "fields": [
-          {
-            "fieldPath": "localId",
-            "columnName": "localId",
-            "affinity": "INTEGER",
-            "notNull": true
           },
           {
             "fieldPath": "wasSent",
@@ -104,7 +86,7 @@
           }
         ],
         "primaryKey": {
-          "autoGenerate": false,
+          "autoGenerate": true,
           "columnNames": [
             "localId"
           ]
@@ -167,7 +149,7 @@
     ],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'fd7206a24e4448dddd1c94edca974d79')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '64ec34c2a712e6590786daef3111d28c')"
     ]
   }
 }

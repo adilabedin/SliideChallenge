@@ -34,45 +34,6 @@ class UserPendingSyncDaoTest {
     }
 
     @Test
-    fun createPendingSync_upsertTwice_keepsOneEntry() = runTest {
-        dao.upsertCreatePendingSync(CreateUserPendingSyncEntity(localId = 1))
-        dao.upsertCreatePendingSync(CreateUserPendingSyncEntity(localId = 1))
-
-        assertThat(dao.getCreatePendingSyncs()).containsExactly(CreateUserPendingSyncEntity(localId = 1))
-    }
-
-    @Test
-    fun createPendingSync_delete_removesOnlyThatEntry() = runTest {
-        dao.upsertCreatePendingSync(CreateUserPendingSyncEntity(localId = 1))
-        dao.upsertCreatePendingSync(CreateUserPendingSyncEntity(localId = 2))
-
-        dao.deleteCreatePendingSync(localId = 1)
-
-        assertThat(dao.getCreatePendingSyncs()).containsExactly(CreateUserPendingSyncEntity(localId = 2))
-    }
-
-    @Test
-    fun createPendingSync_markSent_setsFlagOnThatEntryOnly() = runTest {
-        dao.upsertCreatePendingSync(CreateUserPendingSyncEntity(localId = 1))
-        dao.upsertCreatePendingSync(CreateUserPendingSyncEntity(localId = 2))
-
-        dao.markCreatePendingSyncSent(localId = 1)
-
-        assertThat(dao.getCreatePendingSync(localId = 1)).isEqualTo(CreateUserPendingSyncEntity(1, wasSent = true))
-        assertThat(dao.getCreatePendingSync(localId = 2)).isEqualTo(CreateUserPendingSyncEntity(2, wasSent = false))
-    }
-
-    @Test
-    fun createPendingSync_markSentAfterDelete_doesNotBringItBack() = runTest {
-        dao.upsertCreatePendingSync(CreateUserPendingSyncEntity(localId = 1))
-        dao.deleteCreatePendingSync(localId = 1)
-
-        dao.markCreatePendingSyncSent(localId = 1)
-
-        assertThat(dao.getCreatePendingSync(localId = 1)).isNull()
-    }
-
-    @Test
     fun getSinglePendingSync_returnsThatEntryOrNull() = runTest {
         dao.upsertUpdatePendingSync(update(userId = 7))
         dao.upsertDeletePendingSync(DeleteUserPendingSyncEntity(userId = 8))
@@ -153,11 +114,18 @@ class UserPendingSyncDaoTest {
     }
 
     @Test
-    fun hasPendingSyncs_anyQueueNonEmpty_isTrue() = runTest {
-        dao.upsertCreatePendingSync(CreateUserPendingSyncEntity(localId = 1))
+    fun hasPendingSyncs_unsyncedCreatedUser_isTrueUntilItHasARemoteId() = runTest {
+        val createdUserDao = database.createdUserDao()
+        val localId = createdUserDao.upsert(CreatedUserEntity(name = "Ada", email = "ada@example.com", createdAt = 1))
         assertThat(dao.observeHasPendingSyncs().first()).isTrue()
-        dao.deleteCreatePendingSync(localId = 1)
 
+        createdUserDao.setRemoteId(localId, remoteId = 42, syncedAt = 1_000)
+
+        assertThat(dao.observeHasPendingSyncs().first()).isFalse()
+    }
+
+    @Test
+    fun hasPendingSyncs_anyQueueNonEmpty_isTrue() = runTest {
         dao.upsertUpdatePendingSync(update(userId = 7))
         assertThat(dao.observeHasPendingSyncs().first()).isTrue()
         dao.deleteUpdatePendingSync(userId = 7)

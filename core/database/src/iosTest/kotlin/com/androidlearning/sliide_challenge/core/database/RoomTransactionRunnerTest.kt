@@ -6,8 +6,8 @@ import assertk.assertThat
 import assertk.assertions.containsExactly
 import assertk.assertions.isEmpty
 import assertk.assertions.isEqualTo
-import com.androidlearning.sliide_challenge.core.database.user.CreateUserPendingSyncEntity
 import com.androidlearning.sliide_challenge.core.database.user.CreatedUserEntity
+import com.androidlearning.sliide_challenge.core.database.user.DeleteUserPendingSyncEntity
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
@@ -35,8 +35,8 @@ class RoomTransactionRunnerTest {
         val localId = runner.runInTransaction { writeUserAndQueueEntry() }
 
         assertThat(database.createdUserDao().getAll().first().map { it.localId }).containsExactly(localId)
-        assertThat(database.userPendingSyncDao().getCreatePendingSyncs())
-            .containsExactly(CreateUserPendingSyncEntity(localId))
+        assertThat(database.userPendingSyncDao().getDeletePendingSyncs())
+            .containsExactly(DeleteUserPendingSyncEntity(QUEUED_DELETE_ID))
     }
 
     @Test
@@ -49,7 +49,7 @@ class RoomTransactionRunnerTest {
         }.transform { it.message }.isEqualTo("Failed before the transaction finished")
 
         assertThat(database.createdUserDao().getAll().first()).isEmpty()
-        assertThat(database.userPendingSyncDao().getCreatePendingSyncs()).isEmpty()
+        assertThat(database.userPendingSyncDao().getDeletePendingSyncs()).isEmpty()
     }
 
     /** Writes to two tables through two DAOs, as the repository does. */
@@ -57,7 +57,11 @@ class RoomTransactionRunnerTest {
         val localId = database.createdUserDao().upsert(
             CreatedUserEntity(name = "Ada", email = "ada@example.com", createdAt = 1_000)
         )
-        database.userPendingSyncDao().upsertCreatePendingSync(CreateUserPendingSyncEntity(localId))
+        database.userPendingSyncDao().upsertDeletePendingSync(DeleteUserPendingSyncEntity(QUEUED_DELETE_ID))
         return localId
+    }
+
+    private companion object {
+        const val QUEUED_DELETE_ID = 7L
     }
 }

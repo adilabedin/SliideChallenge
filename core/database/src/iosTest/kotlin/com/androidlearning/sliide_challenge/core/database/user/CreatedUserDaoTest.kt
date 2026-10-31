@@ -94,6 +94,39 @@ class CreatedUserDaoTest {
     }
 
     @Test
+    fun getUnsynced_returnsUsersWithoutRemoteIdOldestFirst() = runTest {
+        val newerId = dao.upsert(createdUser(name = "Newer", createdAt = 2_000))
+        val olderId = dao.upsert(createdUser(name = "Older", createdAt = 1_000))
+        val syncedId = dao.upsert(createdUser(name = "Synced", createdAt = 500))
+        dao.setRemoteId(syncedId, remoteId = 42, syncedAt = 1_000)
+
+        assertThat(dao.getUnsynced().map { it.localId }).containsExactly(olderId, newerId)
+    }
+
+    @Test
+    fun markSent_setsFlagOnThatUserOnlyAndKeepsItsDetails() = runTest {
+        val sentId = dao.upsert(createdUser(name = "Sent"))
+        val otherId = dao.upsert(createdUser(name = "Other"))
+
+        dao.markSent(sentId)
+
+        assertThat(
+            dao.getByLocalId(sentId)
+        ).isEqualTo(createdUser(name = "Sent").copy(localId = sentId, wasSent = true))
+        assertThat(dao.getByLocalId(otherId)?.wasSent).isEqualTo(false)
+    }
+
+    @Test
+    fun markSent_afterDelete_doesNotBringItBack() = runTest {
+        val localId = dao.upsert(createdUser())
+        dao.deleteByLocalId(localId)
+
+        dao.markSent(localId)
+
+        assertThat(dao.getByLocalId(localId)).isNull()
+    }
+
+    @Test
     fun deleteByLocalId_removesOnlyThatUser() = runTest {
         val keptId = dao.upsert(createdUser(name = "Kept", createdAt = 1_000))
         val removedId = dao.upsert(createdUser(name = "Removed", createdAt = 2_000))

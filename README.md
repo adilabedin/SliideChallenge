@@ -29,7 +29,6 @@ flowchart TD
         ufPresentation[":userfeed:presentation<br/><i>feed, form, detail screens + ViewModels (MVI)</i>"]
         ufDomain[":userfeed:domain<br/><i>models, repository interfaces, validator</i>"]
         ufData[":userfeed:data<br/><i>offline-first repository, sync</i>"]
-        ufDatabase[":userfeed:database<br/><i>created users, pending changes (Room)</i>"]
     end
 
     subgraph core["Core"]
@@ -51,12 +50,10 @@ flowchart TD
     ufPresentation --> coreDesignsystem
     ufPresentation --> coreDomain
     ufData --> ufDomain
-    ufData --> ufDatabase
     ufData --> coreData
     ufData --> coreDatabase
     ufData --> coreDomain
     ufDomain --> coreDomain
-    ufDatabase --> coreDomain
 
     coreDesignsystem --> corePresentation
     corePresentation --> coreDomain
@@ -210,26 +207,39 @@ test name in the message, and a badly formatted `commonMain` file produced a `bl
 - **`FeedUserId` is sealed (`Created(localId)` / `Remote(id)`).** Local row ids and GoRest ids are separate sequences
   and can collide, and the repository needs to know which table a row lives in. The list flattens it to a string key
   (`created-1`, `remote-1`) because lazy-list keys must be saveable on Android.
-- **Queue first, then the network (an outbox).** Every change is written to Room *together with* its pending-sync entry,
-  in one transaction (`DatabaseTransactionRunner`, backed by Room's `useWriterConnection` + `immediateTransaction`),
-  before any request. So the feed (a `combine` of the created, cached and pending-sync tables) updates immediately, and
-  a change can't be lost if the app dies mid-request: it is already queued, and the next sync sends it. The request
-  then sends that queued entry, and the entry is removed only on success. On failure it simply stays queued, and the
-  error is returned so the UI can say the change hasn't reached the server yet. An earlier version queued a change only
-  *after* its request failed, so a process death mid-request left an unsynced create stranded, an edit silently
-  overwritten by the next refresh, or a deleted user brought back.
+- **Save first, then the network (an outbox).** Every change is saved to Room as *pending* before any request, so the
+  feed (a `combine` of the created, cached and pending-sync tables) updates immediately, and a change can't be lost if
+  the app dies mid-request: the next sync sends it. A change stops being pending only once GoRest accepts it. On
+  failure it simply stays pending, and the error is returned so the UI can say the change hasn't reached the server
+  yet. An earlier version saved a change only *after* its request failed, so a process death mid-request left an
+  unsynced create stranded, an edit silently overwritten by the next refresh, or a deleted user brought back.
+  - *A create needs no queue entry.* A created user without a GoRest id **is** the pending create, so creating one is a
+    single insert. The normal case is three small writes (insert, mark it sent, store the GoRest id) around the POST.
+    It used to be two transactions plus a separate queue table that was written and deleted within the same second.
+  - *An edit or delete of a GoRest user* is written *together with* its pending-sync entry, in one transaction
+    (`DatabaseTransactionRunner`, backed by Room's `useWriterConnection` + `immediateTransaction`).
+  - *The repository asks for a background sync itself.* `OfflineFirstUserFeedRepository` calls
+    `UserSyncScheduler.scheduleSync()` right after saving a pending change, before sending it. It does this at save
+    time rather than when a request fails, because a request cut off by the app dying never reports a failure. If the
+    request then succeeds, the scheduled run finds nothing left and cancels itself (below).
+  - *A failed request gets a retry of its own.* If the save's request fails and the change is still pending (not
+    rejected for good), the repository calls `UserSyncScheduler.scheduleChangeSync(change)` with a
+    `PendingUserChange` (`Create(localId)`, `Update(userId)` or `Delete(userId)`). So each failing change retries on
+    its own, separately from the others, and the periodic sync is the safety net for anything left over.
 - **Saves outlive the screen.** The repository runs each change in the injected `ApplicationScope` and awaits it, so a
   save the user confirmed finishes even if the form or details screen closes meanwhile. This replaces the
   `withContext(NonCancellable)` the ViewModels used to wrap saves in: the guarantee now lives in one place, and
   `NonCancellable` is kept for cleanup only (the `kotlin-coroutines` skill).
-- **Unsynced creates never hit the network again.** Editing one updates its row (the pending create carries the
-  edit); deleting one removes the row and its pending create. Once a created user has a `remoteId`, edits and deletes
+- **Unsynced creates never hit the network again.** Editing one updates its row (the POST will carry the edit);
+  deleting one removes the row, which is the whole delete. Once a created user has a `remoteId`, edits and deletes
   go to the server like any other user.
-- **Requests go one at a time, so an older edit can never win.** Saves and syncs share one `Mutex`. Each send re-reads
-  its queue entry, so it always sends the latest edit and skips anything a sync already sent. Previously an inline
-  PATCH could race a sync's PATCH of an older edit, and if the older one landed last it won on GoRest *and* locally.
-  Queuing an edit replaces any older one for that user, and deleting a user drops its queued edit in the same
-  transaction that queues the delete.
+- **One lock per user, so an older edit can never win and one slow user holds up nobody else.** Every send (a save's
+  own request, a per-change retry, each item of the periodic sync) takes its user's lock (`KeyedMutex<FeedUserId>`: a
+  create by its local id, an edit or delete by its GoRest id) and re-reads what it sends, so it always sends the latest
+  edit and skips anything another send already handled. Changes to the same user go out one at a time, in order;
+  changes to different users never wait for each other. This replaced one `Mutex` shared by every save and sync, under
+  which a save to one user waited for a whole sync of everyone else. Queuing an edit replaces any older one for that
+  user, and deleting a user drops its queued edit in the same transaction.
 
 ### Add / edit user form (`UserFormScreen`)
 
@@ -292,20 +302,28 @@ test name in the message, and a badly formatted `commonMain` file produced a `bl
 
 ### Background sync (WorkManager on Android, BGTaskScheduler on iOS)
 
-- **Every 30 minutes, only while online and only while something is pending.** `PendingSyncScheduling` (shared code)
-  watches `observeHasPendingSyncs()` (one Room query over the three pending tables) and schedules the sync whenever
-  changes start pending. Only a finished sync cancels it, and only once nothing is left, so nothing wakes up for an
-  empty queue. The observer never cancels: the queue can empty mid-sync (deleting a created user whose POST is in
-  flight), and cancelling then would stop the worker before it queues the follow-up DELETE. A change queued just as
-  the cancel goes through reschedules it. A schedule left over from an earlier run with an empty queue runs once and
-  cancels itself.
+- **Every 30 minutes, only while online and only while something is pending.** The repository schedules the sync
+  whenever it saves a pending change (see the write path above), so you can find where a sync is requested by
+  reading the repository, not an observer elsewhere. The domain interface `UserChangesSync` owns everything else
+  about syncing, implemented once in shared code by `SchedulingUserChangesSync`: a run (`sync()`) sends the queue
+  through `UserFeedRepository.syncPendingChanges()` and then updates the schedule. It covers the two moments the
+  repository can't:
+  - *At launch,* `scheduleIfPending()` schedules the sync if `observeHasPendingSyncs()` (unsynced created users plus
+    the edit and delete queues) is true. This catches a change saved just before the app died, too soon for its
+    schedule call.
+  - *At the end of a run,* `sync()` cancels the schedule once nothing is left, so nothing wakes up for an
+    empty queue. Only a finished sync cancels: the queue can empty mid-sync (deleting a created user whose POST is in
+    flight), and cancelling then would stop the worker before it queues the follow-up DELETE. A change saved just as
+    the cancel goes through reschedules it.
+  A schedule left over with an empty queue (e.g. the save's own request succeeded) runs once and cancels itself.
   `WorkManagerUserSyncScheduler` enqueues a unique 30-minute periodic `UserSyncWorker` with a `CONNECTED` network
   constraint and `KEEP`, so an app restart doesn't reset the period. The first run happens as soon as a network is
   available.
 - **The sync logic is shared; only scheduling is per platform.** `UserFeedRepository.syncPendingChanges()` and
-  `PendingSyncScheduling` live in common code and are unit-tested on both targets. `UserSyncScheduler` is a domain
-  interface with a WorkManager implementation (Android) and a `BGTaskScheduler` one (iOS), each wired by a
-  platform-specific `userFeedSyncModule`.
+  `SchedulingUserChangesSync` live in common code and are unit-tested on both targets. The platform hosts
+  (`UserSyncWorker`, `IosUserSync`) only decide *when* to run and depend on the `UserChangesSync` and
+  `UserSyncScheduler` interfaces, never on a concrete class. `UserSyncScheduler` has a WorkManager implementation
+  (Android) and a `BGTaskScheduler` one (iOS), each wired by a platform-specific `userFeedSyncModule`.
 - **iOS: background app refresh plus a sync whenever the app becomes active.** `BackgroundTaskUserSyncScheduler`
   books a `BGAppRefreshTaskRequest` for no earlier than 30 minutes ahead. iOS decides when it actually runs (based on
   battery and how often the app is used), never runs it after the user force-quits the app, and simulators don't run
@@ -314,17 +332,31 @@ test name in the message, and a badly formatted `commonMain` file produced a `bl
   handler must be registered before launch finishes, so Swift's `iOSApp.init()` calls `startIosApp()`, which starts
   Koin (`MainViewController` no longer does). The identifier is listed in `Info.plist`
   (`BGTaskSchedulerPermittedIdentifiers`, `UIBackgroundModes: fetch`).
-- **Syncs never overlap.** A foreground and a background sync can run at the same time on iOS, so
-  `syncPendingChanges()` holds a `Mutex`, which a save's own request also takes; otherwise two of them could send the
-  same queued change. Each step re-reads its entry before sending, since another send may have handled it.
+- **A failed change retries on its own (Android).** `WorkManagerUserSyncScheduler.scheduleChangeSync()` enqueues a
+  one-time `UserChangeSyncWorker` per change, as unique work named after it (e.g. `sync_user_change_update_42`), with
+  a `CONNECTED` constraint and exponential backoff from 30 seconds. It calls `UserChangesSync.syncChange()`, which
+  returns an error only while the change is still pending, so the worker returns `retry()` then and `success()` once
+  GoRest has settled the change (accepted, rejected with 422, or the user gone with 404), whichever send settled it.
+  So the WorkManager inspector shows exactly which change is failing, and one change's backoff never delays another.
+  `KEEP` means a change already waiting to retry keeps its place in the backoff. A per-change retry never cancels the
+  periodic schedule; only a full run does.
+- **iOS has no per-change retries.** `BGTaskScheduler` offers no per-task network constraint or backoff, so
+  `BackgroundTaskUserSyncScheduler.scheduleChangeSync()` does nothing: a failed change waits for the refresh booked
+  when it was saved, or for the sync that runs whenever the app becomes active. Rebooking there would only push the
+  refresh further out.
+- **Overlapping sends are safe.** A foreground and a background sync can run at the same time on iOS, and on Android a
+  per-change retry can run alongside the periodic sync or a save. The per-user lock and the re-read before each send
+  mean the same change is never sent twice.
 - **Order: creates, then edits, then deletes.** Each item is sent on its own, so one failure doesn't block the rest.
   A user created offline and then edited or deleted while its POST was in flight gets that edit or delete queued
-  straight after the 201, and it is sent in the same run.
+  straight after the 201. A periodic run sends it in the same run; after a save's own POST it gets a per-change retry
+  of its own, since it takes the GoRest id's lock rather than the create's. Within one periodic run items still go one
+  after another; independence between changes comes from the per-change retries.
 - **A queued edit is cleared only if it is still the one that was sent** (matched on `updatedAt`), so a newer edit
   made during the PATCH is kept.
 - **WorkManager is initialized by Koin** (`workManagerFactory()` in `SliideApplication`, with the default initializer
-  removed in the manifest), so the worker gets the repository by constructor injection. The worker returns `failure()`
-  rather than `retry()`: failed items stay queued, and WorkManager resets periodic work to its next period after a
+  removed in the manifest), so the workers get their dependencies by constructor injection. The periodic worker returns
+  `failure()` rather than `retry()`: failed items stay queued, and WorkManager resets periodic work to its next period after a
   failure (checked in `WorkerWrapper`) instead of marking it failed.
 
 ### Local database (`:core:database`)
@@ -353,7 +385,7 @@ test name in the message, and a badly formatted `commonMain` file produced a `bl
   app entry point (`SliideApplication`, `startIosApp`).
 - **One application scope.** `ApplicationScope` (`:core:domain`, a typed `CoroutineScope`, so it needs no qualifier) is
   bound once in `coreDataModule`. The repository and `UserFeedViewModel` use it for work that must outlive a screen, and
-  both app entry points start the sync observers in it instead of creating their own scopes.
+  both app entry points run the launch-time sync check in it instead of creating their own scopes.
 - **Constructor references by default** (`singleOf`, `viewModelOf`). `Clock.System` is bound once, so classes that take
   a `Clock` can use them too; tests still pass a fake clock directly. The lambda form is kept only where route
   arguments arrive through `parametersOf`.
@@ -396,19 +428,21 @@ test name in the message, and a badly formatted `commonMain` file produced a `bl
   the last page we fetch, and a refresh replaces `UsersTable`. `CreatedUsersTable` keeps every user created on this
   device (with a nullable `remoteId` until the POST succeeds) and is never cleared by a refresh or a sync; the feed
   shows it above the fetched page.
-- **Pending syncs: one table per operation (create / update / delete).** Modelled on the Tasky project, but split
-  because the three have different shapes: a pending create only needs the created row's `localId` (its payload stays
-  on that row), a pending update stores the latest edit keyed by server id (upsert, so only the newest edit is sent),
-  and a pending delete is just the server id. A row is removed only after its request succeeds. Editing or deleting a
-  user that hasn't been POSTed yet changes or removes the created row in place, so nothing is queued for it. Pending
-  updates/deletes are exposed as `Flow`s so the feed can overlay them on server rows a refresh would otherwise restore.
+- **Pending syncs: the created row for creates, one table each for updates and deletes.** Modelled on the Tasky
+  project, but split because the operations have different shapes. A pending create would only repeat what the created
+  row already says (no `remoteId` yet; the payload is on the row), so it has no table: the row carries a `wasSent` flag
+  instead (below). A pending update stores the latest edit keyed by server id (upsert, so only the newest edit is
+  sent), and a pending delete is just the server id. A row is removed only after its request succeeds. Editing or
+  deleting a user that hasn't been POSTed yet changes or removes the created row in place, so nothing is queued for
+  it. Pending updates/deletes are exposed as `Flow`s so the feed can overlay them on server rows a refresh would
+  otherwise restore.
 - **Creates send placeholder `gender` and `status`.** GoRest rejects a create without them (422), but the brief's form
   only has name and email, so `KtorUserFeedApi` sends `gender = "female"`, `status = "active"`. They are passed
   explicitly rather than as DTO defaults, because the JSON encoder omits properties left at their default value.
 - **A failed sync keeps the change queued; only success removes it.** There are two exceptions:
   - A 404 on a queued edit or delete means the user is already gone from GoRest, so the change is dropped.
   - A 422 on a create (GoRest refuses the user, in practice because the email is already taken) can never succeed.
-    So the created user and its pending create are removed in one transaction, whether the 422 comes back on the
+    So the created user is removed (its row is its pending create), whether the 422 comes back on the
     first POST or in a later sync. When it comes back to the add-user form, the form shows "This email is already
     taken" inline and stays open, so the user can fix it in place. When it comes back from a background sync, the user
     simply disappears from the feed. *Trade-off:* that disappearance is silent; telling the user would need a
@@ -418,7 +452,7 @@ test name in the message, and a badly formatted `commonMain` file produced a `bl
     gap: the row reads "Not synced" all that time with no explanation. The change itself is never dropped.
 - **A lost 201 is recovered, not reported as a rejection.** POST isn't idempotent. If GoRest creates the user but
   the 201 never arrives (a timeout, or the app dying mid-request), the create stays queued and its resend is refused
-  (422) because the email is now taken. Each pending create therefore records `wasSent` just before its POST. A 422
+  (422) because the email is now taken. Each created row therefore records `wasSent` just before its POST. A 422
   on a resend looks the email up (`GET users?email=`; GoRest matches partially, so the exact email is picked) and
   adopts that user's id if the **name matches too**. Otherwise someone else holds the email and it is a genuine
   rejection, and the user is removed. If the lookup fails, the create stays queued. A 422 on the *first* POST is never looked up, so the form's
@@ -429,6 +463,18 @@ test name in the message, and a badly formatted `commonMain` file produced a `bl
   user GoRest has since deleted stays in the feed. Editing it gets a 404, which drops the queued edit as "already gone",
   but the row keeps the edited text and its old "Synced … ago" time, so it looks synced when it isn't. Deleting it works
   (a 404 counts as deleted).
+- **A sync is scheduled when a change is saved, not when its request fails.** Scheduling on failure reads more
+  naturally, but a request cut off by the app dying (killed in the background, swiped away, a crash) never reports a
+  failure, so its change would wait for the next launch. *Trade-off:* a save whose request succeeds still leaves a
+  schedule behind. On Android that is one extra worker run, which finds nothing and cancels itself. On iOS each save
+  rebooks the background refresh 30 minutes out, which is harmless because the app also syncs whenever it becomes
+  active.
+- **Both: the periodic sync at save time, and a per-change retry on failure.** The periodic sync is the safety net
+  that also covers a request cut off by the app dying; the per-change retry (Android) gives each failing change its own
+  backoff and its own row in the WorkManager inspector, so one stuck change neither delays nor hides the others.
+  *Trade-offs:* a periodic run still sends its items one after another (simpler, and each request is bounded by the
+  HTTP timeout), so it can wait on one slow user; the per-change retries are what keep changes independent. iOS gets
+  no per-change retries, since `BGTaskScheduler` has no per-task network constraint or backoff.
 - **iOS sync timing is best-effort.** iOS can't guarantee a 30-minute cadence, which is why the app also syncs
   whenever it becomes active.
 - **Schema stays at version 1 during development.** The app isn't released, so schema changes edit version 1 in

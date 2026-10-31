@@ -16,12 +16,22 @@ interface CreatedUserDao {
     @Query("SELECT * FROM ${DatabaseConstants.CREATED_USERS_TABLE} ORDER BY createdAt DESC, localId DESC")
     fun getAll(): Flow<List<CreatedUserEntity>>
 
+    /** Users whose create GoRest hasn't accepted yet, oldest first, so they are POSTed in the order they were made. */
+    @Query(
+        "SELECT * FROM ${DatabaseConstants.CREATED_USERS_TABLE} WHERE remoteId IS NULL ORDER BY createdAt, localId"
+    )
+    suspend fun getUnsynced(): List<CreatedUserEntity>
+
     @Query("SELECT * FROM ${DatabaseConstants.CREATED_USERS_TABLE} WHERE localId = :localId")
     suspend fun getByLocalId(localId: Long): CreatedUserEntity?
 
     /** Edits only the user's fields, so a [setRemoteId] landing concurrently is never overwritten. */
     @Query("UPDATE ${DatabaseConstants.CREATED_USERS_TABLE} SET name = :name, email = :email WHERE localId = :localId")
     suspend fun updateDetails(localId: Long, name: String, email: String)
+
+    /** An update rather than an upsert, so it never brings back a deleted user or overwrites a concurrent edit. */
+    @Query("UPDATE ${DatabaseConstants.CREATED_USERS_TABLE} SET wasSent = 1 WHERE localId = :localId")
+    suspend fun markSent(localId: Long)
 
     /** Records the 201: the user now has a GoRest id and was in sync at [syncedAt]. */
     @Query(

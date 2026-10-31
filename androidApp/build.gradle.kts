@@ -7,6 +7,7 @@ dependencies {
     implementation(projects.core.domain)
     implementation(projects.core.presentation)
     implementation(projects.userfeed.data)
+    implementation(projects.userfeed.domain)
     implementation(libs.koin.android)
     implementation(libs.koin.androidx.workmanager)
     implementation(libs.androidx.core.splashscreen)

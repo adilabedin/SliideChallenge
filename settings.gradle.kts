@@ -40,5 +40,4 @@ include(":core:designsystem")
 
 include(":userfeed:domain")
 include(":userfeed:data")
-include(":userfeed:database")
 include(":userfeed:presentation")

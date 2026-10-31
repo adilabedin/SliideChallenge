@@ -5,7 +5,8 @@ import android.content.pm.ApplicationInfo
 import com.androidlearning.sliide_challenge.core.domain.util.ApplicationScope
 import com.androidlearning.sliide_challenge.di.initKoin
 import com.androidlearning.sliide_challenge.userfeed.data.di.userFeedSyncModule
-import com.androidlearning.sliide_challenge.userfeed.data.sync.PendingSyncScheduling
+import com.androidlearning.sliide_challenge.userfeed.domain.UserChangesSync
+import kotlinx.coroutines.launch
 import org.koin.android.ext.android.get
 import org.koin.android.ext.koin.androidContext
 import org.koin.androidx.workmanager.koin.workManagerFactory
@@ -21,7 +22,7 @@ class SliideApplication : Application() {
             workManagerFactory()
             modules(userFeedSyncModule)
         }
-        // Lives as long as the process, which is how long pending syncs need watching.
-        get<PendingSyncScheduling>().start(get<ApplicationScope>())
+        // The repository schedules a sync for each change it saves; this catches changes left from an earlier run.
+        get<ApplicationScope>().launch { get<UserChangesSync>().scheduleIfPending() }
     }
 }

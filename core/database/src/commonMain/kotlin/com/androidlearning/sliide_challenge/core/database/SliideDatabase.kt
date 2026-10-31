@@ -4,7 +4,6 @@ import androidx.room.ConstructedBy
 import androidx.room.Database
 import androidx.room.RoomDatabase
 import androidx.room.RoomDatabaseConstructor
-import com.androidlearning.sliide_challenge.core.database.user.CreateUserPendingSyncEntity
 import com.androidlearning.sliide_challenge.core.database.user.CreatedUserDao
 import com.androidlearning.sliide_challenge.core.database.user.CreatedUserEntity
 import com.androidlearning.sliide_challenge.core.database.user.DeleteUserPendingSyncEntity
@@ -17,7 +16,6 @@ import com.androidlearning.sliide_challenge.core.database.user.UserPendingSyncDa
     entities = [
         UserEntity::class,
         CreatedUserEntity::class,
-        CreateUserPendingSyncEntity::class,
         UpdateUserPendingSyncEntity::class,
         DeleteUserPendingSyncEntity::class
     ],

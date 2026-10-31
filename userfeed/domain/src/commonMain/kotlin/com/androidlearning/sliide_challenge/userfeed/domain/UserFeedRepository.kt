@@ -6,9 +6,10 @@ import kotlinx.coroutines.flow.Flow
 
 /**
  * Every change is written to the database and queued for sync first, so [observeUsers] reflects it immediately and it
- * survives the app dying, and then sent to GoRest. If the request fails, the change stays queued for a later sync; the
- * returned error only tells the caller that it has not reached the server yet. A change finishes even if the caller is
- * cancelled meanwhile.
+ * survives the app dying, and then sent to GoRest. If the request fails, the change stays queued and gets a retry of
+ * its own ([UserSyncScheduler.scheduleChangeSync]); the returned error only tells the caller that it has not reached
+ * the server yet. A change finishes even if the caller is cancelled meanwhile. Changes to different users never wait
+ * for each other; changes to the same user are sent one at a time, in order.
  */
 interface UserFeedRepository {
     /** Users created on this device (newest first), then the cached page minus pending deletes, with pending edits applied. */
@@ -45,4 +46,11 @@ interface UserFeedRepository {
      * as gone); anything else stays queued for the next sync. Returns the first error if any change failed.
      */
     suspend fun syncPendingChanges(): EmptyResult<DataError.Network>
+
+    /**
+     * Sends just [change], if it is still pending. Returns an error only while it stays pending, i.e. when retrying it
+     * later could still succeed; a change GoRest settled for good (accepted, rejected, or the user already gone) is a
+     * success.
+     */
+    suspend fun syncChange(change: PendingUserChange): EmptyResult<DataError.Network>
 }

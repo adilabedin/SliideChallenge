@@ -6,25 +6,12 @@ import androidx.room.Upsert
 import com.androidlearning.sliide_challenge.core.database.DatabaseConstants
 import kotlinx.coroutines.flow.Flow
 
-/** Queues of local changes still to be sent to GoRest. A row is removed only once its request has succeeded. */
+/**
+ * Queues of local edits and deletes still to be sent to GoRest. A row is removed only once its request has succeeded.
+ * Creates have no queue: a created user without a GoRest id is the pending create (see [CreatedUserEntity]).
+ */
 @Dao
 interface UserPendingSyncDao {
-    @Upsert
-    suspend fun upsertCreatePendingSync(item: CreateUserPendingSyncEntity)
-
-    @Query("SELECT * FROM ${DatabaseConstants.CREATE_USER_PENDING_SYNCS_TABLE}")
-    suspend fun getCreatePendingSyncs(): List<CreateUserPendingSyncEntity>
-
-    @Query("SELECT * FROM ${DatabaseConstants.CREATE_USER_PENDING_SYNCS_TABLE} WHERE localId = :localId")
-    suspend fun getCreatePendingSync(localId: Long): CreateUserPendingSyncEntity?
-
-    /** An update rather than an upsert, so it never brings back an entry deleted meanwhile. */
-    @Query("UPDATE ${DatabaseConstants.CREATE_USER_PENDING_SYNCS_TABLE} SET wasSent = 1 WHERE localId = :localId")
-    suspend fun markCreatePendingSyncSent(localId: Long)
-
-    @Query("DELETE FROM ${DatabaseConstants.CREATE_USER_PENDING_SYNCS_TABLE} WHERE localId = :localId")
-    suspend fun deleteCreatePendingSync(localId: Long)
-
     /** Replaces any earlier pending edit of the same user, so only the latest one is sent. */
     @Upsert
     suspend fun upsertUpdatePendingSync(item: UpdateUserPendingSyncEntity)
@@ -64,9 +51,9 @@ interface UserPendingSyncDao {
     @Query("DELETE FROM ${DatabaseConstants.DELETE_USER_PENDING_SYNCS_TABLE} WHERE userId = :userId")
     suspend fun deleteDeletePendingSync(userId: Long)
 
-    /** True while any queue has an entry, so background sync only needs scheduling then. */
+    /** True while anything is left to send (an unsynced created user or a queued edit or delete). */
     @Query(
-        "SELECT EXISTS(SELECT 1 FROM ${DatabaseConstants.CREATE_USER_PENDING_SYNCS_TABLE}) " +
+        "SELECT EXISTS(SELECT 1 FROM ${DatabaseConstants.CREATED_USERS_TABLE} WHERE remoteId IS NULL) " +
             "OR EXISTS(SELECT 1 FROM ${DatabaseConstants.UPDATE_USER_PENDING_SYNCS_TABLE}) " +
             "OR EXISTS(SELECT 1 FROM ${DatabaseConstants.DELETE_USER_PENDING_SYNCS_TABLE})"
     )
