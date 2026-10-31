@@ -5,24 +5,18 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
-import com.androidlearning.sliide_challenge.core.presentation.splash.MainViewModel
-import com.androidlearning.sliide_challenge.core.presentation.splash.StartupState
-import org.koin.androidx.viewmodel.ext.android.viewModel
 
 class MainActivity : ComponentActivity() {
 
-    private val mainViewModel: MainViewModel by viewModel()
-
     override fun onCreate(savedInstanceState: Bundle?) {
-        // Must run before super.onCreate so the starting theme is swapped correctly.
-        installSplashScreen().setKeepOnScreenCondition {
-            mainViewModel.startupState.value == StartupState.Loading
-        }
+        // Must run before super.onCreate so the starting theme is swapped correctly. The splash only covers process
+        // start; the feed shimmers while its first page loads, as on iOS.
+        installSplashScreen()
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
 
         setContent {
-            App(mainViewModel = mainViewModel)
+            App()
         }
     }
 }

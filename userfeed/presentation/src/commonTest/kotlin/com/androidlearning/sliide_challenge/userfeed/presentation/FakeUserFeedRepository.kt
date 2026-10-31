@@ -27,10 +27,15 @@ class FakeUserFeedRepository : UserFeedRepository {
     val updateCalls = mutableListOf<Triple<FeedUserId, String, String>>()
     val deleteCalls = mutableListOf<FeedUserId>()
 
-    /** What [refreshUsers] returns, first waiting for [pendingRefresh] when one is set. */
-    var refreshResult: EmptyResult<DataError.Network> = Result.Success(Unit)
-    var pendingRefresh: CompletableDeferred<Unit>? = null
-    var refreshCalls = 0
+    /** What [loadUsers] returns, first waiting for [pendingLoad] when one is set. */
+    var loadResult: EmptyResult<DataError.Network> = Result.Success(Unit)
+    var pendingLoad: CompletableDeferred<Unit>? = null
+    var loadCalls = 0
+
+    /** What [loadUsersIfNotCached] returns, first waiting for [pendingFirstLoad] when one is set. */
+    var firstLoadResult: EmptyResult<DataError.Network> = Result.Success(Unit)
+    var pendingFirstLoad: CompletableDeferred<Unit>? = null
+    var firstLoadCalls = 0
 
     /**
      * Creates and updates that got past [pendingSave]. Like the real repository, a save finishes even if its caller is
@@ -47,10 +52,16 @@ class FakeUserFeedRepository : UserFeedRepository {
         return nextResult
     }
 
-    override suspend fun refreshUsers(): EmptyResult<DataError.Network> {
-        refreshCalls++
-        pendingRefresh?.await()
-        return refreshResult
+    override suspend fun loadUsers(): EmptyResult<DataError.Network> {
+        loadCalls++
+        pendingLoad?.await()
+        return loadResult
+    }
+
+    override suspend fun loadUsersIfNotCached(): EmptyResult<DataError.Network> {
+        firstLoadCalls++
+        pendingFirstLoad?.await()
+        return firstLoadResult
     }
 
     override suspend fun updateUser(id: FeedUserId, name: String, email: String): EmptyResult<DataError.Network> {

@@ -7,7 +7,6 @@ kotlin {
     sourceSets {
         commonMain.dependencies {
             implementation(projects.core.domain)
-            implementation(projects.core.database)
             api(libs.bundles.ktor.common)
             implementation(libs.koin.core)
         }

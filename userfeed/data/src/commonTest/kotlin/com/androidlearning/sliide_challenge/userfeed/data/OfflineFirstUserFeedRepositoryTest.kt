@@ -7,7 +7,6 @@ import assertk.assertions.isEmpty
 import assertk.assertions.isEqualTo
 import assertk.assertions.isFalse
 import assertk.assertions.isTrue
-import com.androidlearning.sliide_challenge.core.data.user.UserDto
 import com.androidlearning.sliide_challenge.core.database.DatabaseTransactionRunner
 import com.androidlearning.sliide_challenge.core.database.user.CreateUserPendingSyncEntity
 import com.androidlearning.sliide_challenge.core.database.user.CreatedUserDao
@@ -17,8 +16,6 @@ import com.androidlearning.sliide_challenge.core.database.user.UpdateUserPending
 import com.androidlearning.sliide_challenge.core.database.user.UserDao
 import com.androidlearning.sliide_challenge.core.database.user.UserEntity
 import com.androidlearning.sliide_challenge.core.database.user.UserPendingSyncDao
-import com.androidlearning.sliide_challenge.core.domain.user.MainRepository
-import com.androidlearning.sliide_challenge.core.domain.user.User
 import com.androidlearning.sliide_challenge.core.domain.util.ApplicationScope
 import com.androidlearning.sliide_challenge.core.domain.util.DataError
 import com.androidlearning.sliide_challenge.core.domain.util.EmptyResult
@@ -49,6 +46,7 @@ import kotlinx.coroutines.yield
 class OfflineFirstUserFeedRepositoryTest {
 
     private class FakeUserFeedApi : UserFeedApi {
+        var lastPageResult: Result<List<UserDto>, DataError.Network> = Result.Success(emptyList())
         var createResult: Result<UserDto, DataError.Network> = Result.Success(UserDto(100, "", ""))
         var updateResult: Result<UserDto, DataError.Network> = Result.Success(UserDto(1, "", ""))
         var findResult: Result<UserDto?, DataError.Network> = Result.Success(null)
@@ -57,6 +55,8 @@ class OfflineFirstUserFeedRepositoryTest {
 
         /** Runs while a request is in flight, to simulate the user changing data meanwhile. */
         var duringRequest: suspend () -> Unit = {}
+
+        override suspend fun getLastPageUsers() = lastPageResult.also { calls += "GET last page" }
 
         override suspend fun createUser(name: String, email: String) = createResult.also {
             calls += "POST $name"
@@ -109,22 +109,6 @@ class OfflineFirstUserFeedRepositoryTest {
         }
 
         override fun getAll(): Flow<List<UserEntity>> = rows.map { it.values.sortedByDescending(UserEntity::id) }
-    }
-
-    /** Like the real one: a successful load replaces the cached page, a failed one leaves it alone. */
-    private class FakeMainRepository(private val userDao: UserDao, private val calls: MutableList<String>) :
-        MainRepository {
-        var lastPage: List<UserEntity> = emptyList()
-        var loadError: DataError.Network? = null
-
-        override fun observeUsers(): Flow<List<User>> = error("Not used by the feed repository")
-
-        override suspend fun loadUsers(): EmptyResult<DataError.Network> {
-            calls += "GET last page"
-            loadError?.let { return Result.Error(it) }
-            userDao.replaceAll(lastPage)
-            return Result.Success(Unit)
-        }
     }
 
     private class FakeCreatedUserDao : CreatedUserDao {
@@ -230,14 +214,12 @@ class OfflineFirstUserFeedRepositoryTest {
     private val userDao = FakeUserDao()
     private val createdUserDao = FakeCreatedUserDao()
     private val pendingSyncDao = FakeUserPendingSyncDao()
-    private val mainRepository = FakeMainRepository(userDao, api.calls)
     private val repository = OfflineFirstUserFeedRepository(
         userFeedApi = api,
         userDao = userDao,
         createdUserDao = createdUserDao,
         pendingSyncDao = pendingSyncDao,
         transactionRunner = FakeTransactionRunner(),
-        mainRepository = mainRepository,
         applicationScope = ApplicationScope(TestScope(UnconfinedTestDispatcher())),
         clock = object : Clock {
             override fun now() = this@OfflineFirstUserFeedRepositoryTest.now
@@ -333,45 +315,95 @@ class OfflineFirstUserFeedRepositoryTest {
         )
     }
 
-    // refreshUsers
+    // loadUsers
 
     @Test
-    fun `refresh sends queued changes before fetching the last page`() = runTest {
+    fun `load sends queued changes before fetching the last page`() = runTest {
         userDao.insertAll(listOf(ada))
         pendingSyncDao.upsertDeletePendingSync(DeleteUserPendingSyncEntity(1))
 
-        repository.refreshUsers()
+        repository.loadUsers()
 
         assertThat(api.calls).containsExactly("DELETE 1", "GET last page")
     }
 
     @Test
-    fun `refresh replaces the cached page and keeps created users on top`() = runTest {
+    fun `load replaces the cached page and keeps created users on top`() = runTest {
         userDao.insertAll(listOf(ada))
         createdUserDao.upsert(CreatedUserEntity(name = "Grace", email = "grace@x.io", createdAt = 1))
-        mainRepository.lastPage = listOf(alan)
+        api.lastPageResult = Result.Success(listOf(UserDto(2, "Alan", "alan@x.io")))
 
-        val result = repository.refreshUsers()
+        val result = repository.loadUsers()
 
         assertThat(result).isEqualTo(Result.Success(Unit))
         assertThat(feed().map { it.id }).containsExactly(FeedUserId.Created(1), FeedUserId.Remote(2))
     }
 
     @Test
-    fun `refresh offline reports the error and keeps the cache and queued changes`() = runTest {
+    fun `load offline reports the error and keeps the cache and queued changes`() = runTest {
         userDao.insertAll(listOf(ada, alan))
         createdUserDao.upsert(CreatedUserEntity(name = "Grace", email = "grace@x.io", createdAt = 1))
         pendingSyncDao.upsertCreatePendingSync(CreateUserPendingSyncEntity(1))
         api.createResult = Result.Error(DataError.Network.NO_INTERNET)
-        mainRepository.loadError = DataError.Network.NO_INTERNET
+        api.lastPageResult = Result.Error(DataError.Network.NO_INTERNET)
 
-        val result = repository.refreshUsers()
+        val result = repository.loadUsers()
 
         assertThat(result).isEqualTo(Result.Error(DataError.Network.NO_INTERNET))
         assertThat(feed().map { it.id })
             .containsExactly(FeedUserId.Created(1), FeedUserId.Remote(2), FeedUserId.Remote(1))
         assertThat(pendingSyncDao.getCreatePendingSyncs())
             .containsExactly(CreateUserPendingSyncEntity(1, wasSent = true))
+    }
+
+    @Test
+    fun `load stamps every fetched user with the fetch time`() = runTest {
+        api.lastPageResult = Result.Success(listOf(UserDto(1, "Ada", "ada@x.io"), UserDto(2, "Alan", "alan@x.io")))
+
+        repository.loadUsers()
+
+        assertThat(userDao.rows.value.values.map { it.lastSyncedAt }).containsExactly(1_000L, 1_000L)
+    }
+
+    // loadUsersIfNotCached
+
+    @Test
+    fun `first load fetches the last page when nothing is cached`() = runTest {
+        api.lastPageResult = Result.Success(listOf(UserDto(1, "Ada", "ada@x.io")))
+
+        val result = repository.loadUsersIfNotCached()
+
+        assertThat(result).isEqualTo(Result.Success(Unit))
+        assertThat(feed().map { it.id }).containsExactly(FeedUserId.Remote(1))
+    }
+
+    @Test
+    fun `first load fetches even when only created users are stored`() = runTest {
+        createdUserDao.upsert(CreatedUserEntity(name = "Grace", email = "grace@x.io", createdAt = 1))
+
+        repository.loadUsersIfNotCached()
+
+        assertThat(api.calls).containsExactly("GET last page")
+    }
+
+    @Test
+    fun `first load does nothing when a page is cached`() = runTest {
+        userDao.insertAll(listOf(ada))
+
+        val result = repository.loadUsersIfNotCached()
+
+        assertThat(result).isEqualTo(Result.Success(Unit))
+        assertThat(api.calls).isEmpty()
+    }
+
+    @Test
+    fun `first load offline reports the error`() = runTest {
+        api.lastPageResult = Result.Error(DataError.Network.NO_INTERNET)
+
+        val result = repository.loadUsersIfNotCached()
+
+        assertThat(result).isEqualTo(Result.Error(DataError.Network.NO_INTERNET))
+        assertThat(feed()).isEmpty()
     }
 
     // createUser

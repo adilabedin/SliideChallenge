@@ -1,6 +1,5 @@
 package com.androidlearning.sliide_challenge.userfeed.data
 
-import com.androidlearning.sliide_challenge.core.data.user.UserDto
 import com.androidlearning.sliide_challenge.core.database.DatabaseTransactionRunner
 import com.androidlearning.sliide_challenge.core.database.user.CreateUserPendingSyncEntity
 import com.androidlearning.sliide_challenge.core.database.user.CreatedUserDao
@@ -9,11 +8,13 @@ import com.androidlearning.sliide_challenge.core.database.user.DeleteUserPending
 import com.androidlearning.sliide_challenge.core.database.user.UpdateUserPendingSyncEntity
 import com.androidlearning.sliide_challenge.core.database.user.UserDao
 import com.androidlearning.sliide_challenge.core.database.user.UserPendingSyncDao
-import com.androidlearning.sliide_challenge.core.domain.user.MainRepository
 import com.androidlearning.sliide_challenge.core.domain.util.ApplicationScope
 import com.androidlearning.sliide_challenge.core.domain.util.DataError
 import com.androidlearning.sliide_challenge.core.domain.util.EmptyResult
 import com.androidlearning.sliide_challenge.core.domain.util.Result
+import com.androidlearning.sliide_challenge.core.domain.util.asEmptyResult
+import com.androidlearning.sliide_challenge.core.domain.util.map
+import com.androidlearning.sliide_challenge.core.domain.util.onSuccess
 import com.androidlearning.sliide_challenge.userfeed.domain.FeedUser
 import com.androidlearning.sliide_challenge.userfeed.domain.FeedUserId
 import com.androidlearning.sliide_challenge.userfeed.domain.UserFeedRepository
@@ -21,6 +22,7 @@ import kotlin.time.Clock
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
@@ -36,7 +38,6 @@ class OfflineFirstUserFeedRepository(
     private val createdUserDao: CreatedUserDao,
     private val pendingSyncDao: UserPendingSyncDao,
     private val transactionRunner: DatabaseTransactionRunner,
-    private val mainRepository: MainRepository,
     private val applicationScope: ApplicationScope,
     private val clock: Clock = Clock.System
 ) : UserFeedRepository {
@@ -68,12 +69,24 @@ class OfflineFirstUserFeedRepository(
         send { syncCreate(localId) }
     }
 
-    override suspend fun refreshUsers(): EmptyResult<DataError.Network> {
+    override suspend fun loadUsers(): EmptyResult<DataError.Network> {
         // Sent first so the fetched page already reflects them; whatever fails stays queued, so only the fetch's
         // outcome is reported.
         syncPendingChanges()
-        return mainRepository.loadUsers()
+        return loadLastPage()
     }
+
+    override suspend fun loadUsersIfNotCached(): EmptyResult<DataError.Network> =
+        if (userDao.getAll().first().isEmpty()) loadUsers() else Result.Success(Unit)
+
+    /** Replaces the cached page with the last GoRest page, stamping each row with the fetch time. */
+    private suspend fun loadLastPage(): EmptyResult<DataError.Network> = userFeedApi.getLastPageUsers()
+        .map { users ->
+            val syncedAt = nowMillis()
+            users.map { it.toEntity(syncedAt) }
+        }
+        .onSuccess { userDao.replaceAll(it) }
+        .asEmptyResult()
 
     override suspend fun updateUser(id: FeedUserId, name: String, email: String): EmptyResult<DataError.Network> =
         outliveCaller {

@@ -8,7 +8,6 @@ import com.androidlearning.sliide_challenge.core.domain.util.EmptyResult
 import com.androidlearning.sliide_challenge.core.domain.util.Result
 import com.androidlearning.sliide_challenge.core.domain.util.onFailure
 import com.androidlearning.sliide_challenge.core.domain.util.onSuccess
-import com.androidlearning.sliide_challenge.core.presentation.splash.StartupState
 import com.androidlearning.sliide_challenge.userfeed.domain.FeedUserId
 import com.androidlearning.sliide_challenge.userfeed.domain.UserFeedRepository
 import kotlin.time.Clock
@@ -38,9 +37,9 @@ import kotlinx.coroutines.launch
  * re-creating the user under a new id, so Undo restores the rows by simply un-hiding them. Closing the screen ends the
  * undo window early, so the deletes are sent then.
  *
- * `MainViewModel` loads the first page and reports how it goes through [UserFeedAction.OnStartupStateChange]. While it
- * loads the feed shimmers (Android hides this behind the system splash; iOS can't). If it fails the feed says so once:
- * in the empty state with a retry, or in a snackbar over users created on this device.
+ * On creation it loads the first page if none is cached ([UserFeedRepository.loadUsersIfNotCached]), shimmering
+ * meanwhile on both platforms. If that fails the feed says why: in the empty state with a retry, or in a snackbar over
+ * users created on this device.
  */
 class UserFeedViewModel(
     private val userFeedRepository: UserFeedRepository,
@@ -62,11 +61,8 @@ class UserFeedViewModel(
     /** Users deleted but still in the database: during the undo window and while the repository deletes run. */
     private val hiddenIds = MutableStateFlow<Set<FeedUserId>>(emptySet())
 
-    /** Loading until the screen passes on the real state, so the empty state never flashes before the first page. */
-    private val startupState = MutableStateFlow(StartupState.Loading)
-
-    /** The last startup state handled, so one re-sent after a rotation isn't reported twice. */
-    private var handledStartupState: StartupState? = null
+    /** True until the first load is over, so the empty state never flashes before the first page. */
+    private val isLoadingFirstPage = MutableStateFlow(true)
 
     private var undoTimer: Job? = null
 
@@ -78,13 +74,13 @@ class UserFeedViewModel(
         now,
         hiddenIds,
         screenState,
-        startupState
-    ) { users, now, hiddenIds, screenState, startupState ->
+        isLoadingFirstPage
+    ) { users, now, hiddenIds, screenState, isLoadingFirstPage ->
         val visibleUsers = users.filterNot { it.id in hiddenIds }.map { it.toFeedUserUi(now) }
         val visibleIds = visibleUsers.mapTo(mutableSetOf()) { it.id }
         screenState.copy(
             // Users created on this device show at once, even while the first page is still loading.
-            isLoading = startupState == StartupState.Loading && visibleUsers.isEmpty(),
+            isLoading = isLoadingFirstPage && visibleUsers.isEmpty(),
             users = visibleUsers,
             // A ticked user can vanish underneath the selection, e.g. once a sync drops it.
             selectedIds = screenState.selectedIds intersect visibleIds,
@@ -97,6 +93,17 @@ class UserFeedViewModel(
             started = SharingStarted.WhileSubscribed(5_000),
             initialValue = UserFeedState()
         )
+
+    init {
+        viewModelScope.launch {
+            val result = try {
+                userFeedRepository.loadUsersIfNotCached()
+            } finally {
+                isLoadingFirstPage.value = false
+            }
+            onFetched(result)
+        }
+    }
 
     fun onAction(action: UserFeedAction) {
         when (action) {
@@ -132,29 +139,17 @@ class UserFeedViewModel(
             UserFeedAction.OnUndoDeleteClick -> undoDelete()
 
             is UserFeedAction.OnDeleteRequested -> requestDelete(action.id)
-
-            is UserFeedAction.OnStartupStateChange -> onStartupStateChange(action.startupState)
-        }
-    }
-
-    private fun onStartupStateChange(newState: StartupState) {
-        if (newState == handledStartupState) return
-        handledStartupState = newState
-        startupState.value = newState
-        if (newState == StartupState.Error) {
-            // The startup only knows the load failed, not why; a retry reports the reason.
-            viewModelScope.launch { onFetched(Result.Error(DataError.Network.UNKNOWN)) }
         }
     }
 
     /** The database drives [state], so the fetched page shows up through [UserFeedRepository.observeUsers]. */
     private fun refresh() {
-        // While starting up, MainViewModel is already fetching the page.
-        if (screenState.value.isRefreshing || startupState.value == StartupState.Loading) return
+        // The first load is already fetching the page.
+        if (screenState.value.isRefreshing || isLoadingFirstPage.value) return
         screenState.update { it.copy(isRefreshing = true) }
         viewModelScope.launch {
             val result = try {
-                userFeedRepository.refreshUsers()
+                userFeedRepository.loadUsers()
             } finally {
                 // Also on cancellation, so the shimmer never outlives the request.
                 screenState.update { it.copy(isRefreshing = false) }
@@ -169,7 +164,7 @@ class UserFeedViewModel(
         result
             .onSuccess { screenState.update { it.copy(loadError = null) } }
             .onFailure { error ->
-                // Read from the database, since [state] may not be collected yet when the startup error comes in.
+                // Read from the database, since [state] may not be collected yet when the first load fails.
                 val hasUsers = userFeedRepository.observeUsers().first().any { it.id !in hiddenIds.value }
                 if (!hasUsers) {
                     screenState.update { it.copy(loadError = error) }

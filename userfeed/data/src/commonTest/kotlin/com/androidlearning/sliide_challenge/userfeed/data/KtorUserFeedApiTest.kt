@@ -3,7 +3,6 @@ package com.androidlearning.sliide_challenge.userfeed.data
 import assertk.assertThat
 import assertk.assertions.isEqualTo
 import com.androidlearning.sliide_challenge.core.data.networking.HttpClientFactory
-import com.androidlearning.sliide_challenge.core.data.user.UserDto
 import com.androidlearning.sliide_challenge.core.domain.util.DataError
 import com.androidlearning.sliide_challenge.core.domain.util.Result
 import io.ktor.client.engine.mock.MockEngine

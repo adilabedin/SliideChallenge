@@ -1,4 +1,4 @@
-package com.androidlearning.sliide_challenge.core.data.user
+package com.androidlearning.sliide_challenge.userfeed.data
 
 import assertk.assertThat
 import assertk.assertions.containsExactly
@@ -16,7 +16,7 @@ import kotlin.test.Test
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
 
-class KtorMainApiTest {
+class KtorUserFeedApiLastPageTest {
 
     private val requestedUrls = mutableListOf<Url>()
 
@@ -32,7 +32,7 @@ class KtorMainApiTest {
         status: HttpStatusCode = HttpStatusCode.OK,
         statusForRequest: (Int) -> HttpStatusCode = { status },
         pageCountForRequest: (Int) -> String? = { "5" }
-    ) = KtorMainApi(
+    ) = KtorUserFeedApi(
         HttpClientFactory.create(
             apiKey = "test-token",
             json = Json { ignoreUnknownKeys = true },

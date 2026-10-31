@@ -32,7 +32,9 @@ class PendingSyncSchedulingTest {
         override suspend fun createUser(name: String, email: String): EmptyResult<DataError.Network> =
             Result.Success(Unit)
 
-        override suspend fun refreshUsers(): EmptyResult<DataError.Network> = Result.Success(Unit)
+        override suspend fun loadUsers(): EmptyResult<DataError.Network> = Result.Success(Unit)
+
+        override suspend fun loadUsersIfNotCached(): EmptyResult<DataError.Network> = Result.Success(Unit)
 
         override suspend fun updateUser(id: FeedUserId, name: String, email: String): EmptyResult<DataError.Network> =
             Result.Success(Unit)

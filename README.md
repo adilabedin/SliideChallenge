@@ -33,10 +33,10 @@ flowchart TD
     end
 
     subgraph core["Core"]
-        corePresentation[":core:presentation<br/><i>MainViewModel, showNow, ObserveAsEvents</i>"]
+        corePresentation[":core:presentation<br/><i>showNow, ObserveAsEvents, DeviceConfiguration</i>"]
         coreDesignsystem[":core:designsystem<br/><i>theme, shimmer, components</i>"]
-        coreDomain[":core:domain<br/><i>Result, DataError, User, MainRepository</i>"]
-        coreData[":core:data<br/><i>Ktor HttpClient, safeCall, GoRest API</i>"]
+        coreDomain[":core:domain<br/><i>Result, DataError, ApplicationScope</i>"]
+        coreData[":core:data<br/><i>Ktor HttpClient, safeCall</i>"]
         coreDatabase[":core:database<br/><i>SliideDatabase, UserDao (Room)</i>"]
     end
 
@@ -61,7 +61,6 @@ flowchart TD
     coreDesignsystem --> corePresentation
     corePresentation --> coreDomain
     coreData --> coreDomain
-    coreData --> coreDatabase
 ```
 
 **Dependency rules** (enforced by how the modules are wired):
@@ -157,44 +156,38 @@ test name in the message, and a badly formatted `commonMain` file produced a `bl
 
 ### Loading users (launch screen → feed)
 
-- **Flow:** `App()` → `MainViewModel` → `MainRepository` → `MainApi` → Ktor `HttpClient`. There is no splash
-  route or splash composable: each platform shows its own native launch screen, and the feed covers the rest.
-- **Android** keeps the system splash (`core-splashscreen`) up via
-  `setKeepOnScreenCondition { startupState == Loading }`; `MainActivity` passes its `MainViewModel` into `App()` so
-  the splash and the feed observe the same state.
-- **iOS** launch screens (`UILaunchScreen`: `LaunchBackground` + `LaunchLogo`) are static and can't be held: iOS
-  removes them on the first frame. The feed then shows its shimmer until the first page is in.
-- **Contracts:** `User` and `MainRepository` live in `:core:domain`; `UserDto` (`@Serializable`), the `toDomain()`
-  mapper, `MainApi`, `KtorMainApi` and `OfflineFirstMainRepository` live in `:core:data`, so serialization types never leak
-  into domain or presentation.
-- **Last page:** `KtorMainApi.getLastPageUsers()` requests the page it believes is last (page 1 on a cold start) and
-  checks that response's `x-pagination-pages` header; if the count differs it follows it (all with `per_page=20`).
-  `HttpClient.get` returns the body together with the response headers (`NetworkResponse`), through the same
-  `safeCall` status/exception mapping. See *Assumptions & trade-offs* for why it works this way.
-- **Offline-first:** Room is the single source of truth. `OfflineFirstMainRepository.loadUsers()` fetches the last
-  page and swaps it into the table with `UserDao.replaceAll()` (one transaction), so the table always holds exactly that
-  page and needs no local pagination. `observeUsers()` only ever reads the database. A failed fetch leaves the cache
-  untouched.
-- **Startup:** `MainViewModel` only calls the network when the database is empty, and exposes
-  `startupState: StateFlow<StartupState>` (`Loading`, `Loaded`, `Error`), where `Error` means nothing was cached and
-  the load failed. `App()` hands the flow to `NavigationRoot`, which reads it inside the feed destination (so its
-  changes don't rebuild the nav graph), and `UserFeedRoot` forwards each value to `UserFeedViewModel` as
-  `OnStartupStateChange`. While `Loading`, an empty feed shimmers (users created on this device still show) and a
-  pull is ignored, since the page is already being fetched. On `Error` the feed says so once, without fetching
-  again: the empty state shows "Couldn't load users" with a **Try again** button, or, over created users, the usual
-  refresh snackbar. The ViewModel remembers the last state it handled, so one re-sent after a rotation isn't
-  reported twice.
-  *Trade-offs:* no shared splash composable. Android already holds its system splash, and on iOS the shimmer is the
-  loading state, so a composable copy of the launch screen would only duplicate one or the other. The error is shown
-  in the feed rather than on an app-level error screen, which would block an app that works offline (users can still
-  be added). A plain enum doesn't say why the load failed, so the startup message is a generic one; a retry reports
-  the actual reason ("No internet connection…").
+- **Flow:** `UserFeedViewModel` → `UserFeedRepository` → `UserFeedApi` → Ktor `HttpClient`. The feed owns its
+  data end to end: it is the only thing that reads or writes the users tables. There is no splash route, splash
+  composable or app-level startup ViewModel.
+- **Launch screens** only cover process start, on both platforms. Android installs the system splash
+  (`core-splashscreen`) without a keep-on-screen condition; iOS launch screens (`UILaunchScreen`: `LaunchBackground` +
+  `LaunchLogo`) can't be held anyway. From the first frame the feed's shimmer is the loading state.
+- **Contracts:** `UserFeedRepository` lives in `:userfeed:domain`; `UserDto` (`@Serializable`), its mappers,
+  `UserFeedApi`, `KtorUserFeedApi` and `OfflineFirstUserFeedRepository` live in `:userfeed:data`, so serialization
+  types never leak into domain or presentation.
+- **Last page:** `KtorUserFeedApi.getLastPageUsers()` requests page 1 to read the `x-pagination-pages` header, then
+  that page (all with `per_page=20`; a single page needs one request). `HttpClient.get` returns the body together
+  with the response headers (`NetworkResponse`), through the same `safeCall` status/exception mapping. See
+  *Assumptions & trade-offs* for why it works this way.
+- **Offline-first:** Room is the single source of truth. A fetch swaps the last page into the table with
+  `UserDao.replaceAll()` (one transaction), so the table always holds exactly that page and needs no local pagination.
+  `observeUsers()` only ever reads the database. A failed fetch leaves the cache untouched.
+- **First load:** on creation `UserFeedViewModel` calls `UserFeedRepository.loadUsersIfNotCached()`, which fetches
+  only when no GoRest page is cached (users created on this device don't count). Meanwhile an empty feed shimmers
+  (created users still show) and a pull is ignored, since the page is already being fetched. If it fails the feed
+  says why: the empty state shows "Couldn't load users" with the real reason and a **Try again** button, or, over
+  created users, the usual refresh snackbar.
+  *Trade-offs:* Android no longer holds its splash during the first fetch, so a first launch shows the shimmer
+  instead. That is the loading state the brief asks for, it doesn't look frozen on a slow network, and both
+  platforms now behave the same. The error is shown in the feed rather than on an app-level error screen, which would
+  block an app that works offline (users can still be added). Earlier versions had an app-level `MainRepository`
+  and `MainViewModel` for this; they wrote the same table as the feed and needed a startup state threaded through
+  navigation, so the fetch moved into the feed.
 - **Feed:** `UserFeedViewModel` observes `UserFeedRepository.observeUsers()` and shows the list (name, email and sync
   status), or an empty-data state when there are no users.
-- **Pull to refresh + shimmer:** pulling the feed down calls `UserFeedRepository.refreshUsers()`, which first sends
-  queued changes (`syncPendingChanges()`, failures stay queued) and then `MainRepository.loadUsers()` for the last
-  page. Users created on this device live in `created_users`, which the refresh never touches, so they stay at the top.
-  During the first database read the list is replaced by shimmering placeholder rows (20 of them, one GoRest page;
+- **Pull to refresh + shimmer:** pulling the feed down calls `UserFeedRepository.loadUsers()`, which first sends
+  queued changes (`syncPendingChanges()`, failures stay queued) and then fetches the last page. Users created on this device live in `created_users`, which the refresh never touches, so they stay at the top.
+  During the first load the list is replaced by shimmering placeholder rows (20 of them, one GoRest page;
   `Modifier.shimmer()` / `ShimmerBlock` in `:core:designsystem`, themed for dark mode). A refresh keeps the cached
   users on screen under the Material spinner (`PullToRefreshBox(isRefreshing = state.isRefreshing)`), so the fetched
   page animates in row by row (`animateItem()`) instead of the whole list being torn down and rebuilt. The list slides
@@ -338,7 +331,7 @@ test name in the message, and a badly formatted `commonMain` file produced a `bl
 
 - Room KMP database `SliideDatabase` (v1, schema exported to `core/database/schemas`) with a single table
   `UsersTable` (`UserEntity`, keyed by the GoRest id) and `UserDao` (`insertAll` with replace-on-conflict,
-  transactional `replaceAll`, `getAll()` as a `Flow` ordered newest-first). Entity ↔ domain mappers live in `:core:data`.
+  transactional `replaceAll`, `getAll()` as a `Flow` ordered newest-first). Its mappers live in `:userfeed:data`.
 - `DatabaseFactory.create(builder)` mirrors `HttpClientFactory.create(...)`: shared code sets the bundled SQLite driver
   and IO dispatcher. Only obtaining the builder is platform-specific (Android needs a `Context` for the file path; iOS
   uses the Documents directory).
@@ -349,8 +342,9 @@ test name in the message, and a badly formatted `commonMain` file produced a `bl
 ### Dependency injection
 
 - **One Koin module per layer, assembled only in the app** (the `android-di-koin` skill). Each core module owns its
-  bindings: `coreDatabaseModule` (database and DAOs), `coreDataModule` (`HttpClient`, `Clock`, `MainApi`,
-  `MainRepository`) and `corePresentationModule` (`MainViewModel`). Features do the same with `userFeedDataModule` and
+  bindings: `coreDatabaseModule` (database and DAOs), `coreDataModule` (`HttpClient`, `Clock`, `ApplicationScope`)
+  and `corePresentationModule` (empty for now, but listed so a future binding never touches the app's wiring).
+  Features do the same with `userFeedDataModule` and
   `userFeedPresentationModule`. `initKoin` in `:composeApp` only lists them, so adding a DAO or a feature never touches
   the app's wiring.
 - **Platform differences stay inside the owning module.** Android's database builder needs the Koin-provided `Context`,
@@ -381,22 +375,20 @@ test name in the message, and a badly formatted `commonMain` file produced a `bl
 
 ## Assumptions & trade-offs
 
-- **"Last page" means the final page of `/users`.** Confirmed wit- **Usually one request, two on a cold start.** GoRest gives no direct way to the last page. We checked the live API:
-  the page count only comes in the `x-pagination-pages` header, the `x-links-*` headers have no "last" link, `sort`/
-  `order` are ignored (always newest first), `page=-1`/`page=last` fall back to page 1, `HEAD` returns 404, and the
-  GraphQL endpoint and v1 API (which had pagination in the body) are gone. But *every* page response carries the
-  count, so we remember the last page in memory and request it directly next time: if its header agrees, that's the
-  answer in one request. On a cold start the guess is page 1, so it costs two. We don't persist the hint: a cold start
-  pays one extra request, and saving it would add storage for little gain.
+- **"Last page" means the final page of `/users`,** read literally from the brief.
+- **Two requests per fetch, one when there is a single page.** GoRest gives no direct way to the last page. We checked
+  the live API: the page count only comes in the `x-pagination-pages` header, the `x-links-*` headers have no "last"
+  link, `sort`/`order` are ignored (always newest first), `page=-1`/`page=last` fall back to page 1, `HEAD` returns
+  404, and the GraphQL endpoint and v1 API (which had pagination in the body) are gone. So every fetch requests page 1
+  for the count, then that page. Remembering the count to skip the first request would save one request per refresh,
+  but the count drifts as others write to GoRest, so a remembered count would often be stale.
 - **`per_page=20` on every request.** The page count depends on the page size, so all calls must agree. GoRest
   accepts up to 100 and silently falls back to 10 above that. The trade-off: the last page holds `total % 20` users
   (anywhere from 1 to 20), so the feed can be short. We accept that because it's what "last page" literally means.
-- **The dataset can change between requests.** GoRest is shared and constantly written to. If our page is no longer
-  last (it grew), or is now past the end (it shrank, returning `[]`), the header reports the new count and we follow
-  it. That's capped at three requests per refresh; if the count is still moving we report an error and keep showing
-  the cache. A missing or unreadable count is reported as an error rather than guessing a page.
- A missing or unreadable count
-  is reported as an error rather than guessing a page.
+- **The dataset can change between requests.** GoRest is shared and constantly written to, so the page count can
+  move between our two requests. The second request then returns what is on that page at that moment, possibly a
+  short or empty page, and the next refresh corrects it. A missing or unreadable count is reported as an error rather
+  than guessing a page, and the cache stays on screen.
 - **Created users are local only.** Confirmed with Sliide: other devices don't need to see them. A user created
   from the app (201) is stored in Room and shown at the top immediately; GoRest ids increase, and the feed sorts by
   `id DESC`.

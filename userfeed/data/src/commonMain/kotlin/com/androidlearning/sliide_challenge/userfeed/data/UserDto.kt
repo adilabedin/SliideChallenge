@@ -1,4 +1,4 @@
-package com.androidlearning.sliide_challenge.core.data.user
+package com.androidlearning.sliide_challenge.userfeed.data
 
 import kotlinx.serialization.Serializable
 

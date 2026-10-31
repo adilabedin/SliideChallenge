@@ -4,7 +4,7 @@ import com.androidlearning.sliide_challenge.core.domain.util.DataError
 import com.androidlearning.sliide_challenge.userfeed.domain.FeedUserId
 
 data class UserFeedState(
-    /** True until the database's first emission, so the empty state doesn't flash on open. */
+    /** True while the first load runs and there is nothing to show yet; the feed shimmers meanwhile. */
     val isLoading: Boolean = true,
     val users: List<FeedUserUi> = emptyList(),
     /** Why the feed is empty: a fetch failed while there were no users to show. Cleared by the next good fetch. */

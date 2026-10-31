@@ -21,11 +21,17 @@ interface UserFeedRepository {
     suspend fun createUser(name: String, email: String): EmptyResult<DataError.Network>
 
     /**
-     * Pull-to-refresh: sends queued changes, then replaces the cached page with the last GoRest page. Users created
+     * Sends queued changes, then replaces the cached page with the last GoRest page. Users created
      * on this device live in their own table, so they stay at the top whatever comes back. On failure the cache is
      * kept and queued changes stay queued.
      */
-    suspend fun refreshUsers(): EmptyResult<DataError.Network>
+    suspend fun loadUsers(): EmptyResult<DataError.Network>
+
+    /**
+     * The feed's first load: a [loadUsers] if no GoRest page is cached yet, otherwise nothing, so opening the app
+     * with a cache is instant and works offline. Users created on this device don't count as a cached page.
+     */
+    suspend fun loadUsersIfNotCached(): EmptyResult<DataError.Network>
 
     suspend fun updateUser(id: FeedUserId, name: String, email: String): EmptyResult<DataError.Network>
 

@@ -30,3 +30,11 @@ fun UserEntity.toFeedUser(pendingEdit: UpdateUserPendingSyncEntity? = null): Fee
     email = pendingEdit?.email ?: email,
     lastSyncedAt = if (pendingEdit == null) Instant.fromEpochMilliseconds(lastSyncedAt) else null
 )
+
+/** [syncedAt] is epoch milliseconds of the fetch that returned this user. */
+fun UserDto.toEntity(syncedAt: Long): UserEntity = UserEntity(
+    id = id,
+    name = name,
+    email = email,
+    lastSyncedAt = syncedAt
+)

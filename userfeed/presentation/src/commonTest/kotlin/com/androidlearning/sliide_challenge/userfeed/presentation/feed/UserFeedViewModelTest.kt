@@ -16,7 +16,6 @@ import assertk.assertions.isTrue
 import com.androidlearning.sliide_challenge.core.domain.util.ApplicationScope
 import com.androidlearning.sliide_challenge.core.domain.util.DataError
 import com.androidlearning.sliide_challenge.core.domain.util.Result
-import com.androidlearning.sliide_challenge.core.presentation.splash.StartupState
 import com.androidlearning.sliide_challenge.userfeed.domain.FeedUser
 import com.androidlearning.sliide_challenge.userfeed.domain.FeedUserId
 import com.androidlearning.sliide_challenge.userfeed.presentation.FakeUserFeedRepository
@@ -64,14 +63,19 @@ class UserFeedViewModelTest {
         Dispatchers.resetMain()
     }
 
-    /** Started up as [startupState] by default, like the screen does on its first composition. */
-    private fun TestScope.viewModel(startupState: StartupState? = StartupState.Loaded) =
-        UserFeedViewModel(repository, applicationScope(), clock).apply {
-            if (startupState != null) onAction(UserFeedAction.OnStartupStateChange(startupState))
-        }
+    private fun TestScope.viewModel() = UserFeedViewModel(repository, applicationScope(), clock)
+
+    private val createdAlan = FeedUser(FeedUserId.Created(1), "Alan", "alan@x.io", lastSyncedAt = null)
 
     @Test
-    fun `empty cache shows the empty state once started`() = runTest {
+    fun `the first load runs once on creation`() = runTest {
+        viewModel()
+
+        assertThat(repository.firstLoadCalls).isEqualTo(1)
+    }
+
+    @Test
+    fun `empty cache shows the empty state once the first load is done`() = runTest {
         val viewModel = viewModel()
 
         viewModel.state.test {
@@ -84,29 +88,23 @@ class UserFeedViewModelTest {
 
     @Test
     fun `an empty feed shimmers while the first page loads`() = runTest {
-        val viewModel = viewModel(StartupState.Loading)
+        val firstLoad = CompletableDeferred<Unit>()
+        repository.pendingFirstLoad = firstLoad
+        val viewModel = viewModel()
 
         viewModel.state.test {
             assertThat(awaitItem().isLoading).isTrue()
 
-            viewModel.onAction(UserFeedAction.OnStartupStateChange(StartupState.Loaded))
+            firstLoad.complete(Unit)
             assertThat(awaitItem().isEmpty).isTrue()
         }
     }
 
     @Test
-    fun `the feed shimmers until the screen passes on the startup state`() = runTest {
-        val viewModel = viewModel(startupState = null)
-
-        viewModel.state.test {
-            assertThat(awaitItem().isLoading).isTrue()
-        }
-    }
-
-    @Test
     fun `users created on this device show while the first page loads`() = runTest {
-        repository.users.value = listOf(FeedUser(FeedUserId.Created(1), "Alan", "alan@x.io", lastSyncedAt = null))
-        val viewModel = viewModel(StartupState.Loading)
+        repository.pendingFirstLoad = CompletableDeferred()
+        repository.users.value = listOf(createdAlan)
+        val viewModel = viewModel()
 
         viewModel.state.test {
             val state = awaitItem()
@@ -117,69 +115,55 @@ class UserFeedViewModelTest {
 
     @Test
     fun `a pull while the first page loads is ignored`() = runTest {
-        val viewModel = viewModel(StartupState.Loading)
+        repository.pendingFirstLoad = CompletableDeferred()
+        val viewModel = viewModel()
 
         viewModel.onAction(UserFeedAction.OnRefresh)
 
-        assertThat(repository.refreshCalls).isEqualTo(0)
+        assertThat(repository.loadCalls).isEqualTo(0)
     }
 
     @Test
-    fun `a failed startup shows the error in the empty state without fetching again`() = runTest {
-        val viewModel = viewModel(StartupState.Loading)
+    fun `a failed first load shows the reason in the empty state`() = runTest {
+        repository.firstLoadResult = Result.Error(DataError.Network.NO_INTERNET)
+        val viewModel = viewModel()
 
         viewModel.events.test {
             viewModel.state.test {
-                assertThat(awaitItem().isLoading).isTrue()
-
-                viewModel.onAction(UserFeedAction.OnStartupStateChange(StartupState.Error))
-                val state = expectMostRecentItem()
+                val state = awaitItem()
                 assertThat(state.isEmpty).isTrue()
-                assertThat(state.loadError).isEqualTo(DataError.Network.UNKNOWN)
+                assertThat(state.loadError).isEqualTo(DataError.Network.NO_INTERNET)
             }
             expectNoEvents()
         }
-        assertThat(repository.refreshCalls).isEqualTo(0)
+        assertThat(repository.loadCalls).isEqualTo(0)
     }
 
     @Test
-    fun `a failed startup over created users shows a snackbar instead`() = runTest {
-        repository.users.value = listOf(FeedUser(FeedUserId.Created(1), "Alan", "alan@x.io", lastSyncedAt = null))
-        val viewModel = viewModel(startupState = null)
+    fun `a failed first load over created users shows a snackbar instead`() = runTest {
+        repository.users.value = listOf(createdAlan)
+        repository.firstLoadResult = Result.Error(DataError.Network.NO_INTERNET)
+        val viewModel = viewModel()
 
         viewModel.events.test {
-            viewModel.onAction(UserFeedAction.OnStartupStateChange(StartupState.Error))
-            assertThat(awaitItem()).isEqualTo(UserFeedEvent.RefreshFailed(DataError.Network.UNKNOWN))
+            assertThat(awaitItem()).isEqualTo(UserFeedEvent.RefreshFailed(DataError.Network.NO_INTERNET))
         }
         assertThat(viewModel.state.value.loadError).isNull()
     }
 
     @Test
-    fun `a startup error sent again after a rotation is not reported twice`() = runTest {
-        repository.users.value = listOf(FeedUser(FeedUserId.Created(1), "Alan", "alan@x.io", lastSyncedAt = null))
-        val viewModel = viewModel(startupState = null)
-
-        viewModel.events.test {
-            viewModel.onAction(UserFeedAction.OnStartupStateChange(StartupState.Error))
-            awaitItem()
-
-            viewModel.onAction(UserFeedAction.OnStartupStateChange(StartupState.Error))
-            expectNoEvents()
-        }
-    }
-
-    @Test
-    fun `retrying after a failed startup reports the reason then clears it once a fetch works`() = runTest {
-        repository.refreshResult = Result.Error(DataError.Network.NO_INTERNET)
-        val viewModel = viewModel(StartupState.Error)
+    fun `retrying after a failed first load clears the error once a fetch works`() = runTest {
+        repository.firstLoadResult = Result.Error(DataError.Network.NO_INTERNET)
+        val viewModel = viewModel()
 
         viewModel.state.test {
-            assertThat(awaitItem().loadError).isEqualTo(DataError.Network.UNKNOWN)
+            assertThat(awaitItem().loadError).isEqualTo(DataError.Network.NO_INTERNET)
 
+            repository.loadResult = Result.Error(DataError.Network.SERVER_ERROR)
             viewModel.onAction(UserFeedAction.OnRefresh)
-            assertThat(expectMostRecentItem().loadError).isEqualTo(DataError.Network.NO_INTERNET)
+            assertThat(expectMostRecentItem().loadError).isEqualTo(DataError.Network.SERVER_ERROR)
 
-            repository.refreshResult = Result.Success(Unit)
+            repository.loadResult = Result.Success(Unit)
             viewModel.onAction(UserFeedAction.OnRefresh)
             assertThat(expectMostRecentItem().loadError).isNull()
         }
@@ -634,7 +618,7 @@ class UserFeedViewModelTest {
     fun `refresh is reported until the fetch finishes`() = runTest {
         repository.users.value = listOf(FeedUser(FeedUserId.Remote(1), "Ada", "ada@x.io", lastSyncedAt = clock.now))
         val pending = CompletableDeferred<Unit>()
-        repository.pendingRefresh = pending
+        repository.pendingLoad = pending
         val viewModel = viewModel()
 
         viewModel.state.test {
@@ -646,13 +630,13 @@ class UserFeedViewModelTest {
             pending.complete(Unit)
             assertThat(awaitItem().isRefreshing).isFalse()
         }
-        assertThat(repository.refreshCalls).isEqualTo(1)
+        assertThat(repository.loadCalls).isEqualTo(1)
     }
 
     @Test
     fun `a pull while refreshing is ignored`() = runTest {
         repository.users.value = listOf(FeedUser(FeedUserId.Remote(1), "Ada", "ada@x.io", lastSyncedAt = clock.now))
-        repository.pendingRefresh = CompletableDeferred()
+        repository.pendingLoad = CompletableDeferred()
         val viewModel = viewModel()
 
         viewModel.state.test {
@@ -662,14 +646,14 @@ class UserFeedViewModelTest {
             assertThat(awaitItem().isRefreshing).isTrue()
             cancelAndIgnoreRemainingEvents()
         }
-        assertThat(repository.refreshCalls).isEqualTo(1)
+        assertThat(repository.loadCalls).isEqualTo(1)
     }
 
     @Test
     fun `a failed refresh keeps the cached users and reports the error once`() = runTest {
         val ada = FeedUser(FeedUserId.Remote(1), "Ada", "ada@x.io", lastSyncedAt = clock.now)
         repository.users.value = listOf(ada)
-        repository.refreshResult = Result.Error(DataError.Network.NO_INTERNET)
+        repository.loadResult = Result.Error(DataError.Network.NO_INTERNET)
         val viewModel = viewModel()
 
         viewModel.events.test {
